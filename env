@@ -1,0 +1,6 @@
+# Installation directories
+
+DOWNLOAD_DIR=~/Downloads
+DEST_BIN_DIR=~/.local/bin
+DEST_OPT_DIR=~/opt
+
