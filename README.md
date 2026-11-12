@@ -42,3 +42,8 @@ Real smoke test passed entirely under `/tmp`: SDKMAN reports core 5.24.0 and nat
 0.8.0; Java and Javac report 25.0.5; compiling and running a small program succeeds;
 repeat installations succeed without creating a Java default. These checks did
 not alter the user's existing SDKMAN installation.
+
+Activate the Node 24 and Java 25 collection in your current shell with
+`source /path/to/toolshed/belts/n24j25.sh`. Belts activate installed tools;
+they do not install them. Missing tools are skipped. Re-sourcing the belt
+preserves unrelated PATH changes without accumulating its own entries.
