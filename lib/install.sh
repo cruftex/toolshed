@@ -77,11 +77,101 @@ download_verified() {
     mkdir -p -- "$(dirname -- "$destination")"
     temporary=$(mktemp -d "$(dirname -- "$destination")/.download.XXXXXXXX")
     _installer_temp_dirs+=("$temporary")
-    curl --fail --location --silent --show-error --proto '=https' --proto-redir '=https' \
-        --connect-timeout 15 --max-time 180 "$url" --output "$temporary/archive" ||
+    _installer_download "$url" "$temporary/archive" ||
         _installer_fail "Download failed: $url"
     verify_sha256 "$temporary/archive" "$expected"
     mv -fT -- "$temporary/archive" "$destination"
+}
+
+_installer_download() {
+    _installer_require curl
+    curl --fail --location --silent --show-error --proto '=https' --proto-redir '=https' \
+        --connect-timeout 15 --max-time 600 "$1" --output "$2"
+}
+
+# Call directly so the library can clean up the staging directory.
+stage_directory() {
+    local _stage_path
+    local -n _stage_output=$1
+    _installer_require mktemp rm
+    _stage_path=$(mktemp -d "${2:-${TMPDIR:-/tmp}}/dev-environment.XXXXXXXX")
+    _installer_temp_dirs+=("$_stage_path")
+    _stage_output=$_stage_path
+}
+
+verify_gpg_signature() {
+    local data=$1 signature=$2 key=$3 fingerprint=$4 directory actual
+    _installer_require gpg awk
+    stage_directory directory
+    actual=$(gpg --no-options --no-autostart --homedir "$directory" --batch --with-colons --show-keys "$key" |
+        awk -F: '$1 == "fpr" {print $10; exit}') || _installer_fail 'Cannot read signing key.'
+    [[ -n $fingerprint && $actual == "$fingerprint" ]] || _installer_fail 'Invalid signing key fingerprint.'
+    gpg --no-options --no-autostart --homedir "$directory" --batch --quiet --import "$key"
+    gpg --no-options --no-autostart --homedir "$directory" --batch --status-fd 1 \
+        --verify "$signature" "$data" >"$directory/status" ||
+        _installer_fail 'Manifest signature verification failed.'
+    # A downloaded key file could contain extra keys. Require the pinned signer.
+    awk -v expected="$fingerprint" '
+        $1 == "[GNUPG:]" && $2 == "VALIDSIG" && ($3 == expected || $NF == expected) { valid = 1 }
+        END { exit !valid }
+    ' "$directory/status" || _installer_fail 'Manifest was not signed by the expected key.'
+}
+
+# Resolve the moving release pointer without treating it as trusted metadata.
+resolve_latest_version() {
+    local _latest_directory _latest_value
+    local -n _latest_output=$2
+    stage_directory _latest_directory
+    _installer_download "$1" "$_latest_directory/latest"
+    _latest_value=$(cat -- "$_latest_directory/latest")
+    [[ $_latest_value =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || _installer_fail 'Invalid latest release version.'
+    _latest_output=$_latest_value
+}
+
+# Cache only authenticated metadata, and reverify it whenever it is reused.
+download_signed_manifest() {
+    local url=$1 key_url=$2 fingerprint=$3 destination=$4 directory
+    _installer_require mkdir dirname mv
+    if [[ -e $destination || -L $destination ]]; then
+        verify_gpg_signature "$destination/manifest.json" "$destination/manifest.json.sig" \
+            "$destination/key.asc" "$fingerprint"
+        return
+    fi
+    mkdir -p -- "$(dirname -- "$destination")"
+    stage_directory directory "$(dirname -- "$destination")"
+    _installer_download "$url" "$directory/manifest.json"
+    _installer_download "$url.sig" "$directory/manifest.json.sig"
+    _installer_download "$key_url" "$directory/key.asc"
+    verify_gpg_signature "$directory/manifest.json" "$directory/manifest.json.sig" "$directory/key.asc" "$fingerprint"
+    mv -T -- "$directory" "$destination"
+}
+
+# Read a checksum only after authenticating the manifest with its pinned key.
+manifest_checksum() {
+    _installer_require python3
+    python3 - "$1" "$2" "$3" <<'PYTHON'
+import json
+import re
+import sys
+
+with open(sys.argv[1]) as f:
+    manifest = json.load(f)
+if manifest["version"] != sys.argv[2]:
+    sys.exit("Error: Signed manifest version does not match the requested release.")
+checksum = manifest["platforms"][sys.argv[3]]["checksum"]
+if not re.fullmatch(r"[0-9a-f]{64}", checksum):
+    sys.exit("Error: Invalid SHA-256 in signed manifest.")
+print(checksum)
+PYTHON
+}
+
+stage_executable() {
+    local _stage_source=$1 _stage_directory
+    local -n _stage_binary=$2
+    _installer_require install
+    stage_directory _stage_directory
+    install -m 755 -- "$_stage_source" "$_stage_directory/binary"
+    _stage_binary=$_stage_directory/binary
 }
 
 # Extract only the requested member; return its staged path in OUTPUT_VARIABLE.
@@ -131,4 +221,114 @@ install_symlink() {
     _installer_temp_dirs+=("$temporary")
     ln -s -- "$target" "$temporary/link"
     mv -fT -- "$temporary/link" "$DEST_BIN_DIR/$name"
+}
+
+# Preserve other JSON settings and permissions; replace the file atomically.
+set_json_env() {
+    _installer_require python3 mkdir dirname
+    mkdir -p -- "$(dirname -- "$1")"
+    python3 - "$1" "$2" "$3" <<'PY'
+import json
+import os
+import stat
+import sys
+import tempfile
+
+path, key, value = sys.argv[1:]
+if os.path.exists(path):
+    with open(path) as f:
+        settings = json.load(f)
+    mode = stat.S_IMODE(os.stat(path).st_mode)
+else:
+    settings = {}
+    mode = 0o600
+settings.setdefault("env", {})[key] = value
+
+fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path))
+try:
+    os.fchmod(fd, mode)
+    with os.fdopen(fd, "w") as f:
+        json.dump(settings, f, indent=2)
+        f.write("\n")
+    os.replace(tmp, path)
+finally:
+    if os.path.exists(tmp):
+        os.unlink(tmp)
+PY
+}
+
+# SDKMAN's upstream scripts use unset variables. Keep compatibility flags scoped
+# to this subprocess, leaving the caller's strict mode and cleanup traps intact.
+sdkman_command() (
+    set +u
+    export SDKMAN_DIR
+    source "$SDKMAN_DIR/bin/sdkman-init.sh"
+    sdkman_selfupdate_feature=false
+    sdkman_auto_answer=true
+    sdkman_checksum_enable=true
+    sdkman_insecure_ssl=false
+    # SDKMAN's install command consults USE even when no current version exists.
+    # Seed a negative answer so it never creates or changes the default link.
+    USE=n
+    sdk "$@" </dev/null
+)
+
+java_is_installed() {
+    local jdk_home=$1 expected=$2 output
+    [[ -x $jdk_home/bin/java && -x $jdk_home/bin/javac ]] || return 1
+    output=$("$jdk_home/bin/java" --version) || return 1
+    [[ $output == "java $expected "* || $output == "openjdk $expected "* ]] || return 1
+    output=$("$jdk_home/bin/javac" -version) || return 1
+    [[ $output == "javac $expected" ]]
+}
+
+# The manager and its mutable candidate tree use SDKMAN's conventional layout.
+# Existing user-managed installations are reused, never upgraded automatically.
+bootstrap_sdkman() {
+    local version=$1 native=$2 platform=$3 script_sha=$4 native_sha=$5
+    local root=${SDKMAN_DIR:-$HOME/.sdkman} cache staging catalog
+    SDKMAN_DIR=$root
+    if [[ -e $root || -L $root ]]; then
+        [[ -s $root/bin/sdkman-init.sh && -s $root/src/sdkman-main.sh &&
+           -s $root/var/version && -s $root/var/platform && -s $root/var/candidates &&
+           -f $root/etc/config ]] || _installer_fail "Incomplete SDKMAN installation: $root"
+        return
+    fi
+    _installer_require unzip cp mkdir mv dirname
+    cache="$DOWNLOAD_DIR/sdkman/$version/$platform"
+    download_verified "https://github.com/sdkman/sdkman-cli/releases/download/$version/sdkman-cli-$version.zip" \
+        "$script_sha" "$cache/sdkman-cli.zip"
+    download_verified "https://github.com/sdkman/sdkman-cli-native/releases/download/v$native/sdkman-cli-native-$native-x86_64-unknown-linux-gnu.zip" \
+        "$native_sha" "$DOWNLOAD_DIR/sdkman-native/$native/$platform/sdkman-cli-native.zip"
+    mkdir -p -- "$(dirname -- "$root")"
+    stage_directory staging "$(dirname -- "$root")"
+    unzip -q "$cache/sdkman-cli.zip" -d "$staging/scripts" || _installer_fail 'Cannot extract SDKMAN scripts.'
+    unzip -q "$DOWNLOAD_DIR/sdkman-native/$native/$platform/sdkman-cli-native.zip" -d "$staging/native" ||
+        _installer_fail 'Cannot extract SDKMAN native commands.'
+    mkdir -p -- "$staging/root"
+    cp -a -- "$staging/scripts/sdkman-$version/." "$staging/root/"
+    cp -a -- "$staging/native/sdkman-cli-native-$native-x86_64-unknown-linux-gnu/." "$staging/root/"
+    mkdir -p -- "$staging/root/"{etc,var/metadata,tmp,ext,candidates}
+    _installer_download https://api.sdkman.io/2/candidates/all "$staging/catalog"
+    catalog=$(cat -- "$staging/catalog")
+    [[ $catalog =~ ^[a-z0-9-]+(,[a-z0-9-]+)*$ && ,$catalog, == *,java,* ]] ||
+        _installer_fail 'Invalid SDKMAN candidate catalog.'
+    printf '%s\n' "$catalog" > "$staging/root/var/candidates"
+    printf '%s\n' linuxx64 > "$staging/root/var/platform"
+    printf '%s\n' "$version" > "$staging/root/var/version"
+    printf '%s\n' "$native" > "$staging/root/var/version_native"
+    cat > "$staging/root/etc/config" <<'CONFIG'
+sdkman_auto_answer=false
+sdkman_colour_enable=true
+sdkman_selfupdate_feature=false
+sdkman_auto_complete=true
+sdkman_auto_env=false
+sdkman_beta_channel=false
+sdkman_checksum_enable=true
+sdkman_insecure_ssl=false
+sdkman_native_enable=true
+CONFIG
+    SDKMAN_DIR="$staging/root" sdkman_command version
+    [[ ! -e $root && ! -L $root ]] || _installer_fail "SDKMAN destination appeared during staging: $root"
+    mv -T -- "$staging/root" "$root"
 }

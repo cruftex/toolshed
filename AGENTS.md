@@ -1,11 +1,35 @@
 # Reproducible development environment
 
-Every installer must reproduce a specific tool version. Pin the version, use a
-version-specific download URL, and embed the expected SHA-256 in the installer.
+Except for Claude Code (see below), every installer must reproduce a specific tool
+version. Pin the version, use a version-specific download URL, and embed the
+expected SHA-256 in the installer.
 Do not discover `latest` at runtime, accept version overrides, run unpinned remote
 installation scripts, or upgrade tools automatically.
 
+### SDKMAN exception
+
+Java 25 uses normal SDKMAN candidate installation, including its runtime download
+URLs, installation hooks, checksum policy, cache, and candidate layout. Pin its
+exact Oracle candidate identifier; do not resolve a moving Java version at runtime.
+SDKMAN itself is bootstrapped from pinned, embedded-SHA-256-verified script and
+native release archives. Reuse complete existing SDKMAN installations at their
+existing versions without upgrading them. SDKMAN uses `SDKMAN_DIR` from `env`
+(default `~/.sdkman`) rather than `DEST_OPT_DIR` or executable links in
+`DEST_BIN_DIR`; its candidate cache is managed by SDKMAN. Keep checksums enabled,
+TLS verification enabled, and self-updates disabled during installer commands.
+Fresh SDKMAN configuration disables self-updates. Do not change the Java default,
+even when no default was previously selected. No shell-profile changes are allowed.
+
 ## Downloads and verification
+
+- Claude Code is exempt from version and embedded SHA-256 pins: resolve the latest
+  release when its installer is run, authenticate the versioned manifest with
+  Anthropic's GPG key fingerprint `31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE`, and
+  verify the executable against that signed manifest before execution or install.
+  Check that the manifest version matches the resolved release. Cache downloads
+  under `~/.cache/toolshed` (configured by `DOWNLOAD_DIR`), by tool and version;
+  reverify cached signatures and executable checksums before reuse. Keep Claude's
+  built-in updater disabled so upgrades happen through the verified installer.
 
 - When adding or updating an installer, actually download each supported archive
   and calculate its SHA-256 locally. Compare it with the publisher's checksum when
@@ -60,6 +84,8 @@ installation scripts, or upgrade tools automatically.
 | Tool | Version | Platform | Installer |
 | --- | --- | --- | --- |
 | Bun | 1.4.4 | Linux x86_64, glibc | `install/install-bun.sh` |
+| SDKMAN (fresh installs) | 5.24.0 / native 0.8.0 | Linux x86_64, glibc | `install/install-sdkman.sh` |
+| Oracle Java | 25.0.5 (`25.0.5.0-oracle`) | Linux x86_64, glibc | `install/install-java25.sh` |
 
 Bun's `bunx` entry point is a relative symlink to the `bun` executable.
 

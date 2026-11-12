@@ -1,6 +1,7 @@
 # Installation directories
 
-DOWNLOAD_DIR=~/Downloads
+DOWNLOAD_DIR=~/.cache/toolshed
 DEST_BIN_DIR=~/.local/bin
 DEST_OPT_DIR=~/opt
+SDKMAN_DIR="${SDKMAN_DIR:-$HOME/.sdkman}"
 

@@ -1,6 +1,7 @@
 """Offline helper tests; set BUN_TEST_ARCHIVE for the real Bun smoke test."""
 
 import hashlib
+import json
 import os
 from pathlib import Path
 import shlex
@@ -44,11 +45,23 @@ class InstallerTests(unittest.TestCase):
             "#!/bin/bash\n"
             "printf 'called\\n' >> \"$CURL_CALLS\"\n"
             "while (( $# )); do\n"
+            "  if [[ $1 == https://* ]]; then url=$1; fi\n"
             "  if [[ $1 == --output ]]; then output=$2; shift; fi\n"
             "  shift\n"
             "done\n"
-            "case ${DOWNLOAD_MODE:-valid} in\n"
-            " valid) cp -- \"$TEST_ARCHIVE\" \"$output\" ;;\n"
+            "source=$TEST_ARCHIVE\n"
+            "if [[ ${SIGNED_RELEASE:-} ]]; then\n"
+            "  case $url in\n"
+            "    */latest) source=$SIGNED_RELEASE/latest ;;\n"
+            "    */manifest.json) source=$SIGNED_RELEASE/manifest.json ;;\n"
+            "    */manifest.json.sig) source=$SIGNED_RELEASE/manifest.json.sig ;;\n"
+            "    */claude-code.asc) source=$SIGNED_RELEASE/key.asc ;;\n"
+            "  esac\n"
+            "fi\n"
+            "mode=${DOWNLOAD_MODE:-valid}\n"
+            "if [[ ${DOWNLOAD_MATCH:-} && $url != *\"$DOWNLOAD_MATCH\" ]]; then mode=valid; fi\n"
+            "case $mode in\n"
+            " valid) cp -- \"$source\" \"$output\" ;;\n"
             " corrupt) printf 'corrupt' > \"$output\" ;;\n"
             " fail) printf 'partial' > \"$output\"; exit 22 ;;\n"
             " interrupt) printf 'partial' > \"$output\"; kill -TERM \"$PPID\"; exit 143 ;;\n"
@@ -88,6 +101,9 @@ class InstallerTests(unittest.TestCase):
         for directory in (self.downloads, self.bin):
             if directory.exists():
                 self.assertFalse([p for p in directory.iterdir() if p.name.startswith(".")])
+                self.assertFalse([p for p in directory.rglob("*") if p.name.startswith(
+                    (".download.", ".install.", ".link.", "dev-environment.")
+                )])
 
     def test_download_and_cache_reuse(self):
         first = self.download()
@@ -293,6 +309,227 @@ class InstallerTests(unittest.TestCase):
         self.assertIn("SHA-256 verification failed", result.stderr)
         self.assertEqual((self.bin / "bun").read_text(), "previous Bun")
         self.assert_no_temporary_files()
+
+    def prepare_claude_fixture(self):
+        # Installer integration uses a signature mock; publisher signatures are
+        # verified by the separate real-GPG test below, without private keys.
+        release = self.root / "signed release"
+        release.mkdir()
+        binary = b"#!/bin/sh\nprintf '2.1.322 (Claude Code)\\n'\n"
+        (release / "claude").write_bytes(binary)
+        (release / "latest").write_text("2.1.322")
+        (release / "key.asc").write_text("31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE")
+        digest = hashlib.sha256(binary).hexdigest()
+        self.write_mock_manifest(release, {"version": "2.1.322", "platforms": {
+            platform: {"checksum": digest} for platform in ("linux-x64", "linux-arm64")
+        }})
+        gpg = self.commands / "gpg"
+        gpg.write_text("""#!/usr/bin/env python3
+import hashlib
+import os
+from pathlib import Path
+import sys
+if '--show-keys' in sys.argv:
+    print('fpr:::::::::' + Path(sys.argv[-1]).read_text() + ':')
+elif '--verify' in sys.argv:
+    expected = Path(sys.argv[-2]).read_text()
+    actual = hashlib.sha256(Path(sys.argv[-1]).read_bytes()).hexdigest()
+    print('[GNUPG:] VALIDSIG ' + os.environ.get('GPG_SIGNER', '31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE'))
+    sys.exit(0 if actual == expected else 1)
+elif '--import' not in sys.argv:
+    sys.exit(2)
+""")
+        gpg.chmod(0o755)
+        self.env.update(HOME=str(self.root / "home"), SIGNED_RELEASE=str(release),
+                        TEST_ARCHIVE=str(release / "claude"))
+        return self.repo / "install/install-claude.sh", release, binary
+
+    def write_mock_manifest(self, release, manifest):
+        data = json.dumps(manifest).encode()
+        (release / "manifest.json").write_bytes(data)
+        (release / "manifest.json.sig").write_text(hashlib.sha256(data).hexdigest())
+
+    def run_claude(self, **environment):
+        return subprocess.run(
+            [self.repo / "install/install-claude.sh"], cwd=self.root,
+            env=dict(self.env, **environment), capture_output=True, text=True, timeout=30,
+        )
+
+    def test_real_gpg_signature_and_tampering_without_agent(self):
+        fixtures = ROOT / "tests/fixtures/claude"
+        data = self.root / "manifest.json"
+        data.write_bytes((fixtures / "manifest.json").read_bytes())
+        script = ('verify_gpg_signature "$MANIFEST" "$FIXTURES/manifest.json.sig" '
+                  '"$FIXTURES/key.asc" "$FINGERPRINT"')
+        environment = dict(MANIFEST=str(data), FIXTURES=str(fixtures),
+                           FINGERPRINT="31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE")
+        valid = self.run_helper(script, **environment)
+        self.assertEqual(valid.returncode, 0, valid.stderr)
+        wrong_key = self.run_helper(script, **dict(environment, FINGERPRINT="0" * 40))
+        self.assertNotEqual(wrong_key.returncode, 0)
+        self.assertIn("Invalid signing key fingerprint", wrong_key.stderr)
+        data.write_bytes(data.read_bytes() + b" ")
+        tampered = self.run_helper(script, **environment)
+        self.assertNotEqual(tampered.returncode, 0)
+        self.assertIn("signature verification failed", tampered.stderr)
+        self.assert_no_temporary_files()
+
+    def test_claude_rejects_signature_from_extra_key(self):
+        self.prepare_claude_fixture()
+        result = self.run_claude(GPG_SIGNER="0" * 40)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("not signed by the expected key", result.stderr)
+        self.assertFalse(self.bin.exists())
+        self.assert_no_temporary_files()
+
+    def test_claude_latest_install_repeat_cache_and_modified_binary(self):
+        _, _, binary = self.prepare_claude_fixture()
+        settings = Path(self.env["HOME"]) / ".claude/settings.json"
+        settings.parent.mkdir(parents=True)
+        settings.write_text('{"theme": "dark", "env": {"OTHER": "keep"}}')
+        settings.chmod(0o640)
+        first = self.run_claude()
+        self.assertEqual(first.returncode, 0, first.stderr)
+        installed = self.bin / "claude"
+        self.assertEqual(installed.read_bytes(), binary)
+        self.assertTrue(os.access(installed, os.X_OK))
+        self.assertEqual(json.loads(settings.read_text()), {
+            "theme": "dark", "env": {"OTHER": "keep", "DISABLE_UPDATES": "1"},
+        })
+        self.assertEqual(settings.stat().st_mode & 0o777, 0o640)
+        cache = self.downloads / "claude/2.1.322/linux-x64/claude"
+        self.assertEqual(cache.read_bytes(), binary)
+        # Reinstall modified bytes from cache without downloading metadata/binary.
+        self.calls.unlink()
+        installed.write_bytes(binary + b"# modified, same version\n")
+        reinstall = self.run_claude()
+        self.assertEqual(reinstall.returncode, 0, reinstall.stderr)
+        self.assertEqual(installed.read_bytes(), binary)
+        self.assertEqual(self.calls.read_text().splitlines(), ["called"])
+        # A matching installation does not need the binary download cache.
+        cache.unlink()
+        self.calls.unlink()
+        before = installed.stat()
+        repeat = self.run_claude()
+        self.assertEqual(repeat.returncode, 0, repeat.stderr)
+        self.assertEqual(installed.stat().st_ino, before.st_ino)
+        self.assertEqual(self.calls.read_text().splitlines(), ["called"])
+        self.assert_no_temporary_files()
+
+    def test_claude_verification_failures_preserve_existing_binary(self):
+        installer, release, binary = self.prepare_claude_fixture()
+        self.bin.mkdir()
+        installed = self.bin / "claude"
+        installed.write_text("existing installation")
+        original_script = installer.read_text()
+        original_manifest = (release / "manifest.json").read_bytes()
+        original_signature = (release / "manifest.json.sig").read_bytes()
+        cases = (
+            ("fingerprint", "Invalid signing key fingerprint"),
+            ("signature", "signature verification failed"),
+            ("manifest version", "Signed manifest version"),
+            ("manifest digest", "Invalid SHA-256"),
+            ("binary", "SHA-256 verification failed"),
+            ("version", "Expected version"),
+        )
+        for failure, message in cases:
+            with self.subTest(failure=failure):
+                shutil.rmtree(self.downloads, ignore_errors=True)
+                script = original_script
+                (release / "manifest.json").write_bytes(original_manifest)
+                (release / "manifest.json.sig").write_bytes(original_signature)
+                (release / "claude").write_bytes(binary)
+                if failure == "fingerprint":
+                    script = script.replace("31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE", "0" * 40)
+                elif failure == "signature":
+                    (release / "manifest.json").write_bytes(original_manifest + b" ")
+                elif failure.startswith("manifest"):
+                    manifest = json.loads(original_manifest)
+                    if failure == "manifest version":
+                        manifest["version"] = "0.0.0"
+                    else:
+                        manifest["platforms"]["linux-x64"]["checksum"] = "invalid"
+                    self.write_mock_manifest(release, manifest)
+                elif failure == "binary":
+                    (release / "claude").write_bytes(b"corrupt")
+                elif failure == "version":
+                    script = script.replace('"$version (Claude Code)"', '"unexpected version"')
+                installer.write_text(script)
+                result = self.run_claude()
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(message, result.stderr)
+                self.assertEqual(installed.read_text(), "existing installation")
+                self.assert_no_temporary_files()
+
+    def test_claude_corrupt_metadata_and_binary_caches_are_rejected(self):
+        self.prepare_claude_fixture()
+        first = self.run_claude()
+        self.assertEqual(first.returncode, 0, first.stderr)
+        installed = self.bin / "claude"
+        installed.write_text("existing installation")
+        cache = self.downloads / "claude/2.1.322"
+        manifest = cache / "manifest/manifest.json"
+        original = manifest.read_bytes()
+        for target in (manifest, cache / "linux-x64/claude"):
+            with self.subTest(target=target.name):
+                target.write_bytes(b"corrupt")
+                result = self.run_claude()
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(installed.read_text(), "existing installation")
+                manifest.write_bytes(original)
+                self.assert_no_temporary_files()
+
+    def test_claude_latest_version_validation_and_upgrade(self):
+        _, release, _ = self.prepare_claude_fixture()
+        for version in ("../escape", "latest", "2.1.322/../../escape"):
+            (release / "latest").write_text(version)
+            result = self.run_claude()
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("Invalid latest release version", result.stderr)
+            self.assertFalse(self.bin.exists())
+        (release / "latest").write_text("2.1.322")
+        first = self.run_claude()
+        self.assertEqual(first.returncode, 0, first.stderr)
+        (release / "latest").write_text("2.1.323")
+        binary = b"#!/bin/sh\nprintf '2.1.323 (Claude Code)\\n'\n"
+        (release / "claude").write_bytes(binary)
+        self.write_mock_manifest(release, {"version": "2.1.323", "platforms": {
+            "linux-x64": {"checksum": hashlib.sha256(binary).hexdigest()},
+        }})
+        upgrade = self.run_claude()
+        self.assertEqual(upgrade.returncode, 0, upgrade.stderr)
+        self.assertEqual((self.bin / "claude").read_bytes(), binary)
+        self.assertTrue((self.downloads / "claude/2.1.322/linux-x64/claude").exists())
+        self.assertTrue((self.downloads / "claude/2.1.323/linux-x64/claude").exists())
+
+    def test_claude_download_failure_and_interrupt_cleanup(self):
+        self.prepare_claude_fixture()
+        self.bin.mkdir()
+        installed = self.bin / "claude"
+        installed.write_text("existing installation")
+        for asset in ("latest", "manifest.json", "manifest.json.sig", "claude-code.asc", "/linux-x64/claude"):
+            for mode in ("fail", "interrupt"):
+                with self.subTest(asset=asset, mode=mode):
+                    shutil.rmtree(self.downloads, ignore_errors=True)
+                    result = self.run_claude(DOWNLOAD_MODE=mode, DOWNLOAD_MATCH=asset)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertEqual(installed.read_text(), "existing installation")
+                    self.assert_no_temporary_files()
+
+    def test_claude_platform_mapping_and_unsupported_hosts(self):
+        self.prepare_claude_fixture()
+        uname = self.commands / "uname"
+        uname.write_text('#!/bin/sh\ncase "$1" in -s) echo "$MOCK_OS";; -m) echo "$MOCK_ARCH";; esac\n')
+        uname.chmod(0o755)
+        for system, arch in (("Linux", "aarch64"), ("Darwin", "arm64")):
+            with self.subTest(system=system, arch=arch):
+                result = self.run_claude(MOCK_OS=system, MOCK_ARCH=arch)
+                if system == "Linux":
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertTrue((self.downloads / "claude/2.1.322/linux-arm64/claude").exists())
+                else:
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("Unsupported Claude platform", result.stderr)
 
     @unittest.skipUnless(os.environ.get("BUN_TEST_ARCHIVE"), "Set BUN_TEST_ARCHIVE to a real Bun archive")
     def test_real_bun_installation_and_repeat(self):

@@ -1,0 +1,23 @@
+{
+  "verified_on": "2026-11-12",
+  "version": "2.1.322",
+  "manifest_url": "https://downloads.claude.ai/claude-code-releases/2.1.322/manifest.json",
+  "signature_url": "https://downloads.claude.ai/claude-code-releases/2.1.322/manifest.json.sig",
+  "key_url": "https://downloads.claude.ai/keys/claude-code.asc",
+  "signing_fingerprint": "31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE",
+  "fixture_purpose": "Public publisher metadata for real GPG verification tests; no private keys.",
+  "downloads": {
+    "linux-x64": {
+      "url": "https://downloads.claude.ai/claude-code-releases/2.1.322/linux-x64/claude",
+      "sha256": "bfb3703ad5380242328459bc62ada4bde8ae7ba57c6e1eeadb9c00e08874c478",
+      "matches_signed_manifest": true,
+      "smoke_test": "Installed and repeated installation in temporary directories; --version and --help passed."
+    },
+    "linux-arm64": {
+      "url": "https://downloads.claude.ai/claude-code-releases/2.1.322/linux-arm64/claude",
+      "sha256": "f220ca50ea4f3222043ff83cc224a1262e0196e9897acc0871efa94235b0c1fd",
+      "matches_signed_manifest": true,
+      "smoke_test": "Checksum verified; executable not run on the x64 test host."
+    }
+  }
+}
