@@ -3,16 +3,12 @@ set -euo pipefail
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/lib/install.sh"
 
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-version=$(cat "$root/pins/codex")
-[[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || _installer_fail "Invalid Codex version pin."
+version=$(read_version_pin codex)
 platform=$(platform_string)
 key="$version/$platform"
 stage_codex_component() {
     local name=$1 asset archive
-    source "$root/metadata/$name.sh"
-    local -A archive_sha256=() binary_sha256=()
-    archive_sha256[$key]=${checksums[archive/$key]:-}
-    binary_sha256[$key]=${checksums[binary/$key]:-}
+    load_binary_checksums "$name" "$key"
     [[ ${archive_sha256[$key]:-} && ${binary_sha256[$key]:-} ]] ||
         _installer_fail "No pinned $name checksums for $key."
     binary_is_installed "$name" "${binary_sha256[$key]}" && return

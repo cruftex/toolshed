@@ -1,18 +1,27 @@
 #!/usr/bin/env bash
-# Candidate downloads and hooks use SDKMAN's verification policy; see AGENTS.md.
 set -euo pipefail
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/lib/install.sh"
 
-version=25.0.5.0-oracle
-java_version=25.0.5
-require_platform Linux x86_64
-"$_installer_library_dir/../install/install-sdkman.sh"
-jdk_home="$SDKMAN_DIR/candidates/java/$version"
-if ! java_is_installed "$jdk_home" "$java_version"; then
-    [[ ! -e $jdk_home && ! -L $jdk_home ]] ||
-        _installer_fail "Incomplete or unexpected Java installation: $jdk_home (remove it manually before retrying)."
-    _installer_require curl zip unzip tar find sed
-    sdkman_command install java "$version"
-    java_is_installed "$jdk_home" "$java_version" || _installer_fail "Java $java_version validation failed."
+version=$(read_version_pin java25)
+platform=$(platform_string)
+source "$_installer_library_dir/../metadata/java25.sh"
+checksum=${checksums[archive/$version/$platform]:-}
+[[ $checksum ]] || _installer_fail "No pinned Java checksums for $version/$platform."
+jdk_home="$DEST_OPT_DIR/java25/$version"
+if ! java_is_installed "$jdk_home" "$version"; then
+    [[ ! -e $jdk_home && ! -L $jdk_home ]] || _installer_fail "Incomplete Java installation: $jdk_home"
+    archive="$DOWNLOAD_DIR/java25/$version/jdk-$version-linux-x64.tar.gz"
+    download_verified "https://download.oracle.com/java/25/archive/jdk-${version}_linux-x64_bin.tar.gz" "$checksum" "$archive"
+    _installer_require tar mkdir mv
+    mkdir -p -- "$DEST_OPT_DIR/java25"
+    stage_directory staging "$DEST_OPT_DIR/java25"
+    tar -xzf "$archive" -C "$staging" || _installer_fail 'Cannot extract Java archive.'
+    java_is_installed "$staging/jdk-$version" "$version" || _installer_fail "Java $version validation failed."
+    [[ ! -e $jdk_home && ! -L $jdk_home ]] || _installer_fail "Java destination appeared during staging: $jdk_home"
+    mv -T -- "$staging/jdk-$version" "$jdk_home"
 fi
-printf 'Java %s is installed. Select it with: sdk use java %s\n' "$java_version" "$version"
+for executable in "$jdk_home"/bin/*; do
+    [[ -f $executable && -x $executable ]] || continue
+    install_symlink "$executable" "${executable##*/}"
+done
+printf 'Java %s is installed in %s\n' "$version" "$jdk_home"

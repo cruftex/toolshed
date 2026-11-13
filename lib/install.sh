@@ -55,6 +55,23 @@ verify_sha256() {
     _installer_check_sha256 "$1" "$2" || _installer_fail "SHA-256 verification failed: $1"
 }
 
+# Read repository-owned pins and paired archive/executable metadata.
+read_version_pin() {
+    local value
+    value=$(cat "$_installer_library_dir/../pins/$1")
+    [[ $value =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || _installer_fail "Invalid version pin: $1"
+    printf '%s\n' "$value"
+}
+
+load_binary_checksums() {
+    local tool=$1 key=$2
+    local -A checksums=()
+    source "$_installer_library_dir/../metadata/$tool.sh"
+    declare -gA archive_sha256=() binary_sha256=()
+    archive_sha256[$key]=${checksums[archive/$key]:-}
+    binary_sha256[$key]=${checksums[binary/$key]:-}
+}
+
 # Check bytes and executable permission without executing an untrusted local file.
 binary_is_installed() {
     _installer_require sha256sum
@@ -257,22 +274,6 @@ finally:
 PY
 }
 
-# SDKMAN's upstream scripts use unset variables. Keep compatibility flags scoped
-# to this subprocess, leaving the caller's strict mode and cleanup traps intact.
-sdkman_command() (
-    set +u
-    export SDKMAN_DIR
-    source "$SDKMAN_DIR/bin/sdkman-init.sh"
-    sdkman_selfupdate_feature=false
-    sdkman_auto_answer=true
-    sdkman_checksum_enable=true
-    sdkman_insecure_ssl=false
-    # SDKMAN's install command consults USE even when no current version exists.
-    # Seed a negative answer so it never creates or changes the default link.
-    USE=n
-    sdk "$@" </dev/null
-)
-
 java_is_installed() {
     local jdk_home=$1 expected=$2 output
     [[ -x $jdk_home/bin/java && -x $jdk_home/bin/javac ]] || return 1
@@ -282,53 +283,3 @@ java_is_installed() {
     [[ $output == "javac $expected" ]]
 }
 
-# The manager and its mutable candidate tree use SDKMAN's conventional layout.
-# Existing user-managed installations are reused, never upgraded automatically.
-bootstrap_sdkman() {
-    local version=$1 native=$2 platform=$3 script_sha=$4 native_sha=$5
-    local root=${SDKMAN_DIR:-$HOME/.sdkman} cache staging catalog
-    SDKMAN_DIR=$root
-    if [[ -e $root || -L $root ]]; then
-        [[ -s $root/bin/sdkman-init.sh && -s $root/src/sdkman-main.sh &&
-           -s $root/var/version && -s $root/var/platform && -s $root/var/candidates &&
-           -f $root/etc/config ]] || _installer_fail "Incomplete SDKMAN installation: $root"
-        return
-    fi
-    _installer_require unzip cp mkdir mv dirname
-    cache="$DOWNLOAD_DIR/sdkman/$version/$platform"
-    download_verified "https://github.com/sdkman/sdkman-cli/releases/download/$version/sdkman-cli-$version.zip" \
-        "$script_sha" "$cache/sdkman-cli.zip"
-    download_verified "https://github.com/sdkman/sdkman-cli-native/releases/download/v$native/sdkman-cli-native-$native-x86_64-unknown-linux-gnu.zip" \
-        "$native_sha" "$DOWNLOAD_DIR/sdkman-native/$native/$platform/sdkman-cli-native.zip"
-    mkdir -p -- "$(dirname -- "$root")"
-    stage_directory staging "$(dirname -- "$root")"
-    unzip -q "$cache/sdkman-cli.zip" -d "$staging/scripts" || _installer_fail 'Cannot extract SDKMAN scripts.'
-    unzip -q "$DOWNLOAD_DIR/sdkman-native/$native/$platform/sdkman-cli-native.zip" -d "$staging/native" ||
-        _installer_fail 'Cannot extract SDKMAN native commands.'
-    mkdir -p -- "$staging/root"
-    cp -a -- "$staging/scripts/sdkman-$version/." "$staging/root/"
-    cp -a -- "$staging/native/sdkman-cli-native-$native-x86_64-unknown-linux-gnu/." "$staging/root/"
-    mkdir -p -- "$staging/root/"{etc,var/metadata,tmp,ext,candidates}
-    _installer_download https://api.sdkman.io/2/candidates/all "$staging/catalog"
-    catalog=$(cat -- "$staging/catalog")
-    [[ $catalog =~ ^[a-z0-9-]+(,[a-z0-9-]+)*$ && ,$catalog, == *,java,* ]] ||
-        _installer_fail 'Invalid SDKMAN candidate catalog.'
-    printf '%s\n' "$catalog" > "$staging/root/var/candidates"
-    printf '%s\n' linuxx64 > "$staging/root/var/platform"
-    printf '%s\n' "$version" > "$staging/root/var/version"
-    printf '%s\n' "$native" > "$staging/root/var/version_native"
-    cat > "$staging/root/etc/config" <<'CONFIG'
-sdkman_auto_answer=false
-sdkman_colour_enable=true
-sdkman_selfupdate_feature=false
-sdkman_auto_complete=true
-sdkman_auto_env=false
-sdkman_beta_channel=false
-sdkman_checksum_enable=true
-sdkman_insecure_ssl=false
-sdkman_native_enable=true
-CONFIG
-    SDKMAN_DIR="$staging/root" sdkman_command version
-    [[ ! -e $root && ! -L $root ]] || _installer_fail "SDKMAN destination appeared during staging: $root"
-    mv -T -- "$staging/root" "$root"
-}

@@ -21,7 +21,7 @@ class InstallerTests(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
         self.repo = self.root / "repository with spaces"
-        for directory in ("install", "lib"):
+        for directory in ("install", "lib", "metadata", "pins"):
             shutil.copytree(ROOT / directory, self.repo / directory)
         self.downloads = self.root / "download cache"
         self.bin = self.root / "destination bin"
@@ -222,7 +222,7 @@ class InstallerTests(unittest.TestCase):
 
     def test_unpinned_bun_version_fails_before_download(self):
         installer = self.repo / "install/install-bun.sh"
-        installer.write_text(installer.read_text().replace("version=1.4.4", "version=9.9.9"))
+        (self.repo / "pins/bun").write_text("9.9.9\n")
         result = subprocess.run(
             [installer], cwd=self.root, env=self.env,
             capture_output=True, text=True, timeout=30,
@@ -240,13 +240,11 @@ class InstallerTests(unittest.TestCase):
         archive_digest = hashlib.sha256(self.archive.read_bytes()).hexdigest()
         binary_digest = hashlib.sha256(binary).hexdigest()
         installer = self.repo / "install/install-bun.sh"
-        script = installer.read_text().replace("version=1.4.4", "version=9.9.9")
-        for name, digest in (("archive_sha256", archive_digest), ("binary_sha256", binary_digest)):
-            script = script.replace(
-                f"declare -Ar {name}=(\n",
-                f"declare -Ar {name}=(\n    [9.9.9/linux-aarch64]={digest}\n",
-            )
-        installer.write_text(script)
+        (self.repo / "pins/bun").write_text("9.9.9\n")
+        metadata = self.repo / "metadata/bun.sh"
+        with metadata.open("a") as f:
+            f.write(f"checksums[archive/9.9.9/linux-aarch64]={archive_digest}\n")
+            f.write(f"checksums[binary/9.9.9/linux-aarch64]={binary_digest}\n")
         uname = self.commands / "uname"
         uname.write_text('#!/bin/sh\ncase "$1" in -s) echo Linux;; -m) echo aarch64;; esac\n')
         uname.chmod(0o755)
