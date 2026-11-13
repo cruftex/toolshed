@@ -1,8 +1,7 @@
 # Toolshed
 
 Checksum-verified installers for a reproducible development environment. Claude
-Code installs the latest release using a GPG-authenticated manifest. Codex also
-installs the latest release; other tools use pinned versions. Downloads are cached in `~/.cache/toolshed`, configured by
+Code installs the latest release using a GPG-authenticated manifest. All other tools use pinned versions. Downloads are cached in `~/.cache/toolshed`, configured by
 `DOWNLOAD_DIR` in `env`.
 
 Repository and directory name: `toolshed`.
@@ -48,16 +47,26 @@ Activate the Node 24 and Java 25 collection in your current shell with
 they do not install them. Missing tools are skipped. Re-sourcing the belt
 preserves unrelated PATH changes without accumulating its own entries.
 
-Run `./install/install-codex.sh` to install the latest Codex CLI on Linux x86_64
-with glibc. It obtains the release version and archive SHA-256 from GitHub's
-release API over HTTPS, checks the versioned cached archive on every run, and
-compares the extracted executable with the installed bytes. GitHub's API digest
-is not an independently signed manifest, so this verification relies on GitHub's
-release metadata and TLS.
+Run `./install/install-codex.sh` to install Codex 0.169.0 and its matching
+`codex-code-mode-host` on Linux x86_64 with glibc. Both executables are installed
+in `DEST_BIN_DIR`; verified cached archives are reused when needed.
 
-Codex smoke test on 2026-11-13: [0.169.0 Linux x86_64 archive](https://github.com/openai/codex/releases/download/rust-v0.169.0/codex-x86_64-unknown-linux-musl.tar.gz)
-had SHA-256 `9af4d751fce183faedea629437d5252dbf458eeb04130cf4f97be844621ea985`,
-matching GitHub's release digest. The extracted executable's SHA-256 was
-`b452ca20f838a8855a88a41050ee4a694033fff4ea3ecdad5633e6e0e8d13f2b`.
-Installation and repeat installation in temporary directories succeeded, and
-`codex --version` reported `codex-cli 0.169.0`.
+The Codex pin is in `pins/codex`; the archive and executable digests for each
+component are in `metadata/codex.sh` and `metadata/codex-code-mode-host.sh`.
+Run `./update/update-codex.sh` to explicitly update Codex. It reads the latest
+stable GitHub release, verifies both downloaded archives against GitHub's release
+digests, records the calculated executable digests, moves the pin, and runs the
+installer. This update trusts GitHub's release metadata over HTTPS; its digests
+are not independently authenticated. The updater modifies this checkout and
+installs to the configured destination. Normal installs do not look up releases.
+
+Codex smoke test on 2026-11-13, Linux x86_64: the locally calculated archive
+SHA-256 values matched GitHub's release digests:
+
+| Release archive | Archive SHA-256 | Extracted executable SHA-256 |
+| --- | --- | --- |
+| [Codex 0.169.0](https://github.com/openai/codex/releases/download/rust-v0.169.0/codex-x86_64-unknown-linux-musl.tar.gz) | `9af4d751fce183faedea629437d5252dbf458eeb04130cf4f97be844621ea985` | `b452ca20f838a8855a88a41050ee4a694033fff4ea3ecdad5633e6e0e8d13f2b` |
+| [Code mode host 0.169.0](https://github.com/openai/codex/releases/download/rust-v0.169.0/codex-code-mode-host-x86_64-unknown-linux-musl.tar.gz) | `cbed6a8d25e8268792b757767fbc76d4c62e84bcf8ee4a63f97547f0de3aaceb` | `e9f2ef68671b2b6ac68902d19e8dafda3f5928e678ecf3f30c74b203a2c403ed` |
+
+Installation and repeat installation in temporary directories succeeded;
+`codex --version` reported `codex-cli 0.169.0` and the host's `--help` ran.
