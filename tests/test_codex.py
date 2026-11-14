@@ -25,7 +25,7 @@ class CodexInstallerTests(unittest.TestCase):
             shutil.copytree(ROOT / "metadata", repo / "metadata")
             shutil.copytree(ROOT / "pins", repo / "pins")
             cache, dest = root / "cache", root / "bin"
-            (repo / "env").write_text(f"DOWNLOAD_DIR={shlex.quote(str(cache))}\nDEST_BIN_DIR={shlex.quote(str(dest))}\nDEST_OPT_DIR={shlex.quote(str(root / 'opt'))}\n")
+            (repo / "env").write_text(f"TOOLSHED_DOWNLOAD_DIR={shlex.quote(str(cache))}\nTOOLSHED_BIN_DIR={shlex.quote(str(dest))}\nTOOLSHED_OPT_DIR={shlex.quote(str(root / 'opt'))}\n")
             installer = repo / "install/install-codex.sh"
             script = installer.read_text()
             binaries = {}
@@ -77,7 +77,7 @@ cp "$FIXTURES/${url##*/}" "$out"
             for directory in ("install", "lib", "metadata", "pins", "update"):
                 shutil.copytree(ROOT / directory, repo / directory)
             cache, dest = root / "cache", root / "bin"
-            (repo / "env").write_text(f"DOWNLOAD_DIR={shlex.quote(str(cache))}\nDEST_BIN_DIR={shlex.quote(str(dest))}\nDEST_OPT_DIR={shlex.quote(str(root / 'opt'))}\n")
+            (repo / "env").write_text(f"TOOLSHED_DOWNLOAD_DIR={shlex.quote(str(cache))}\nTOOLSHED_BIN_DIR={shlex.quote(str(dest))}\nTOOLSHED_OPT_DIR={shlex.quote(str(root / 'opt'))}\n")
             assets = []
             binaries = {}
             for name, *_ in PINS:

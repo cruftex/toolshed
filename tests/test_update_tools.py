@@ -20,7 +20,7 @@ class UpdateTests(unittest.TestCase):
             repo = root / 'repo with spaces'
             for directory in ('install', 'lib', 'metadata', 'pins', 'update'):
                 shutil.copytree(ROOT / directory, repo / directory)
-            (repo / 'env').write_text('\n'.join(f'{key}={shlex.quote(str(root / value))}' for key, value in [('DOWNLOAD_DIR','cache'), ('DEST_BIN_DIR','bin'), ('DEST_OPT_DIR','opt')]) + '\n')
+            (repo / 'env').write_text('\n'.join(f'{key}={shlex.quote(str(root / value))}' for key, value in [('TOOLSHED_DOWNLOAD_DIR','cache'), ('TOOLSHED_BIN_DIR','bin'), ('TOOLSHED_OPT_DIR','opt')]) + '\n')
             binary = b"#!/bin/sh\nprintf '1.5.0\\n'\n"
             archive = root / 'bun-linux-x64.zip'
             with zipfile.ZipFile(archive, 'w') as z:
@@ -55,7 +55,7 @@ if [[ $url == */latest ]]; then cp "$FIXTURE/release.json" "$out"; else cp "$FIX
             repo = root / 'repo'
             for directory in ('install', 'lib', 'metadata', 'pins', 'update'):
                 shutil.copytree(ROOT / directory, repo / directory)
-            (repo / 'env').write_text('\n'.join(f'{key}={shlex.quote(str(root / value))}' for key, value in [('DOWNLOAD_DIR','cache'), ('DEST_BIN_DIR','bin'), ('DEST_OPT_DIR','opt')]) + '\n')
+            (repo / 'env').write_text('\n'.join(f'{key}={shlex.quote(str(root / value))}' for key, value in [('TOOLSHED_DOWNLOAD_DIR','cache'), ('TOOLSHED_BIN_DIR','bin'), ('TOOLSHED_OPT_DIR','opt')]) + '\n')
             binary = b"#!/bin/sh\nprintf 'Version: v12.14.0\\n'\n"
             assets = []
             for platform in ('linux_amd64', 'linux_arm64', 'darwin_amd64', 'darwin_arm64'):
@@ -84,3 +84,18 @@ if [[ $url == */latest ]]; then cp "$FIXTURE/release.json" "$out"; else cp "$FIX
             self.assertEqual((root / 'bin/vegeta').read_bytes(), binary)
             for platform in ('linux_amd64', 'linux_arm64', 'darwin_amd64', 'darwin_arm64'):
                 self.assertIn(f'archive/12.14.0/{platform}', (repo / 'metadata/vegeta.sh').read_text())
+            metadata = repo / 'metadata/vegeta.sh'
+            lines = metadata.read_text().splitlines(keepends=True)
+            lines = [line for line in lines if '12.14.0/linux_amd64' not in line]
+            lines = [line.replace(next(a['digest'][7:] for a in assets if 'darwin_arm64' in a['name']), '0' * 64)
+                     if 'archive/12.14.0/darwin_arm64' in line else line for line in lines]
+            metadata.write_text(''.join(lines))
+            before = metadata.read_bytes()
+            pin = (repo / 'pins/vegeta').read_bytes()
+            installed = (root / 'bin/vegeta').read_bytes()
+            result = subprocess.run([repo / 'update/update-vegeta.sh'], cwd=root, env=env, capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('Conflicting archive metadata', result.stderr)
+            self.assertEqual(metadata.read_bytes(), before)
+            self.assertEqual((repo / 'pins/vegeta').read_bytes(), pin)
+            self.assertEqual((root / 'bin/vegeta').read_bytes(), installed)

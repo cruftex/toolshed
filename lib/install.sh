@@ -3,7 +3,7 @@
 
 _installer_library_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$_installer_library_dir/../env"
-: "${DOWNLOAD_DIR:?}" "${DEST_BIN_DIR:?}" "${DEST_OPT_DIR:?}"
+: "${TOOLSHED_DOWNLOAD_DIR:?}" "${TOOLSHED_BIN_DIR:?}" "${TOOLSHED_OPT_DIR:?}"
 
 declare -a _installer_temp_dirs=()
 
@@ -75,8 +75,16 @@ load_binary_checksums() {
 # Check bytes and executable permission without executing an untrusted local file.
 binary_is_installed() {
     _installer_require sha256sum
-    [[ -f $DEST_BIN_DIR/$1 && -x $DEST_BIN_DIR/$1 ]] &&
-        _installer_check_sha256 "$DEST_BIN_DIR/$1" "$2"
+    [[ -f $TOOLSHED_BIN_DIR/$1 && -x $TOOLSHED_BIN_DIR/$1 ]] &&
+        _installer_check_sha256 "$TOOLSHED_BIN_DIR/$1" "$2"
+}
+
+# Preserve the HTTPS host and path as cache directories, rejecting ambiguous paths.
+cache_path() {
+    local path=${1#https://}
+    [[ $1 == https://* && $path =~ ^[a-zA-Z0-9._~-]+(/[a-zA-Z0-9._~-]+)+$ && /$path/ != */../* && /$path/ != */./* ]] ||
+        _installer_fail "Unsupported cache URL: $1"
+    printf '%s/%s\n' "$TOOLSHED_DOWNLOAD_DIR" "$path"
 }
 
 # DESTINATION is the version-specific cache path. Never trust an unchecked cache.
@@ -216,28 +224,28 @@ install_binary() {
     local source=$1 name=$2 temporary
     _installer_require mkdir mktemp install mv rm
     [[ -n $name && $name != */* && $name != . && $name != .. ]] || _installer_fail 'Invalid executable name.'
-    mkdir -p -- "$DEST_BIN_DIR"
-    [[ ! -d $DEST_BIN_DIR/$name ]] || _installer_fail "Destination is a directory: $DEST_BIN_DIR/$name"
-    temporary=$(mktemp -d "$DEST_BIN_DIR/.install.XXXXXXXX")
+    mkdir -p -- "$TOOLSHED_BIN_DIR"
+    [[ ! -d $TOOLSHED_BIN_DIR/$name ]] || _installer_fail "Destination is a directory: $TOOLSHED_BIN_DIR/$name"
+    temporary=$(mktemp -d "$TOOLSHED_BIN_DIR/.install.XXXXXXXX")
     _installer_temp_dirs+=("$temporary")
     install -m 755 -- "$source" "$temporary/binary"
-    mv -fT -- "$temporary/binary" "$DEST_BIN_DIR/$name"
+    mv -fT -- "$temporary/binary" "$TOOLSHED_BIN_DIR/$name"
 }
 
 install_symlink() {
     local target=$1 name=$2 temporary
     _installer_require readlink
-    if [[ -L $DEST_BIN_DIR/$name && $(readlink -- "$DEST_BIN_DIR/$name") == "$target" ]]; then
+    if [[ -L $TOOLSHED_BIN_DIR/$name && $(readlink -- "$TOOLSHED_BIN_DIR/$name") == "$target" ]]; then
         return
     fi
     _installer_require mkdir mktemp ln mv rm
     [[ -n $name && $name != */* && $name != . && $name != .. ]] || _installer_fail 'Invalid symlink name.'
-    mkdir -p -- "$DEST_BIN_DIR"
-    [[ ! -d $DEST_BIN_DIR/$name ]] || _installer_fail "Destination is a directory: $DEST_BIN_DIR/$name"
-    temporary=$(mktemp -d "$DEST_BIN_DIR/.link.XXXXXXXX")
+    mkdir -p -- "$TOOLSHED_BIN_DIR"
+    [[ ! -d $TOOLSHED_BIN_DIR/$name ]] || _installer_fail "Destination is a directory: $TOOLSHED_BIN_DIR/$name"
+    temporary=$(mktemp -d "$TOOLSHED_BIN_DIR/.link.XXXXXXXX")
     _installer_temp_dirs+=("$temporary")
     ln -s -- "$target" "$temporary/link"
-    mv -fT -- "$temporary/link" "$DEST_BIN_DIR/$name"
+    mv -fT -- "$temporary/link" "$TOOLSHED_BIN_DIR/$name"
 }
 
 # Preserve other JSON settings and permissions; replace the file atomically.
@@ -283,3 +291,50 @@ java_is_installed() {
     [[ $output == "javac $expected" ]]
 }
 
+
+# Install a versioned, multi-file Maven distribution without replacing an existing one.
+install_maven_package() {
+    local tool=$1 version=$2 url=$3 checksum=$4 root=$5 command=$6 expected=$7
+    local destination="$TOOLSHED_OPT_DIR/$tool/$version" archive staging output checkdir
+    local -a args=(--version)
+    if [[ $tool == mvnd ]]; then
+        stage_directory checkdir
+        args=("-Dmvnd.daemonStorage=$checkdir" --version)
+    fi
+    if [[ ! -e $destination && ! -L $destination ]]; then
+        archive=$(cache_path "$url")
+        download_verified "$url" "$checksum" "$archive"
+        _installer_require tar mkdir mv
+        mkdir -p -- "$TOOLSHED_OPT_DIR/$tool"
+        stage_directory staging "$TOOLSHED_OPT_DIR/$tool"
+        tar -xzf "$archive" -C "$staging" || _installer_fail "Cannot extract $tool archive."
+        [[ -x $staging/$root/bin/$command ]] || _installer_fail "Missing $tool executable."
+        output=$("$staging/$root/bin/$command" "${args[@]}") || _installer_fail "Cannot run $tool."
+        if [[ $tool == mvnd ]]; then
+            "$staging/$root/bin/$command" "-Dmvnd.daemonStorage=$checkdir" --stop >/dev/null || _installer_fail 'Cannot stop test daemon.'
+        fi
+        [[ $output == *"$expected"* ]] || _installer_fail "Unexpected $tool version: $output"
+        [[ ! -e $destination && ! -L $destination ]] || _installer_fail "Destination appeared during staging: $destination"
+        mv -T -- "$staging/$root" "$destination"
+    else
+        [[ -x $destination/bin/$command ]] || _installer_fail "Incomplete $tool installation: $destination"
+        output=$("$destination/bin/$command" "${args[@]}") || _installer_fail "Cannot run installed $tool."
+        if [[ $tool == mvnd ]]; then
+            "$destination/bin/$command" "-Dmvnd.daemonStorage=$checkdir" --stop >/dev/null || _installer_fail 'Cannot stop test daemon.'
+        fi
+        [[ $output == *"$expected"* ]] || _installer_fail "Unexpected installed $tool version: $output"
+    fi
+    install_symlink "$destination/bin/$command" "$command"
+    printf '%s %s is installed in %s\n' "$tool" "$version" "$destination"
+}
+
+install_pinned_maven() {
+    local version=$1 platform checksum url
+    platform=$(platform_string)
+    local -A archive_sha256=()
+    source "$_installer_library_dir/../metadata/maven.sh"
+    checksum=${archive_sha256[$version/$platform]:-}
+    [[ $checksum ]] || _installer_fail "No pinned Maven archive for $version/$platform."
+    url="https://archive.apache.org/dist/maven/maven-3/$version/binaries/apache-maven-$version-bin.tar.gz"
+    install_maven_package maven "$version" "$url" "$checksum" "apache-maven-$version" mvn "Apache Maven $version"
+}

@@ -13,8 +13,9 @@ stage_codex_component() {
         _installer_fail "No pinned $name checksums for $key."
     binary_is_installed "$name" "${binary_sha256[$key]}" && return
     asset="$name-x86_64-unknown-linux-musl"
-    archive="$DOWNLOAD_DIR/codex/$version/$asset.tar.gz"
-    download_verified "https://github.com/openai/codex/releases/download/rust-v$version/$asset.tar.gz" "${archive_sha256[$key]}" "$archive"
+    local url="https://github.com/openai/codex/releases/download/rust-v$version/$asset.tar.gz"
+    archive=$(cache_path "$url")
+    download_verified "$url" "${archive_sha256[$key]}" "$archive"
     tar -xOzf "$archive" "$asset" > "$staging/$name" || _installer_fail "Cannot extract $name."
     verify_sha256 "$staging/$name" "${binary_sha256[$key]}"
     chmod 755 "$staging/$name"
@@ -26,4 +27,4 @@ stage_codex_component codex-code-mode-host
 if [[ -e $staging/codex ]]; then verify_version "$staging/codex" "codex-cli $version"; fi
 if [[ -e $staging/codex-code-mode-host ]]; then install_binary "$staging/codex-code-mode-host" codex-code-mode-host; fi
 if [[ -e $staging/codex ]]; then install_binary "$staging/codex" codex; fi
-printf 'Codex %s and code mode host are installed in %s\n' "$version" "$DEST_BIN_DIR"
+printf 'Codex %s and code mode host are installed in %s\n' "$version" "$TOOLSHED_BIN_DIR"

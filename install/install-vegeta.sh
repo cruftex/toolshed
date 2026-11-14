@@ -26,8 +26,9 @@ load_binary_checksums vegeta "$key"
 [[ ${archive_sha256[$key]:-} && ${binary_sha256[$key]:-} ]] ||
     _installer_fail "No pinned Vegeta checksums for $key."
 
-archive="$DOWNLOAD_DIR/vegeta-v$version-$platform.tar.gz"
 url="https://github.com/tsenart/vegeta/releases/download/v$version/vegeta_${version}_${platform}.tar.gz"
+
+archive=$(cache_path "$url")
 
 if ! binary_is_installed vegeta "${binary_sha256[$key]}"; then
     download_verified "$url" "${archive_sha256[$key]}" "$archive"
@@ -45,4 +46,4 @@ if ! binary_is_installed vegeta "${binary_sha256[$key]}"; then
         _installer_fail "Expected version $version, got: $actual"
     install_binary "$binary" vegeta
 fi
-printf 'Vegeta %s is installed in %s\n' "$version" "$DEST_BIN_DIR"
+printf 'Vegeta %s is installed in %s\n' "$version" "$TOOLSHED_BIN_DIR"

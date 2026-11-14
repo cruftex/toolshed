@@ -21,7 +21,7 @@ class JavaInstallerTests(unittest.TestCase):
         for name in ('install', 'lib', 'metadata', 'pins', 'profile.d', 'update'):
             shutil.copytree(ROOT / name, self.repo / name)
         self.cache, self.bin, self.opt = (self.root / name for name in ('cache', 'bin', 'opt'))
-        (self.repo / 'env').write_text('\n'.join(f'{key}={shlex.quote(str(value))}' for key, value in [('DOWNLOAD_DIR', self.cache), ('DEST_BIN_DIR', self.bin), ('DEST_OPT_DIR', self.opt)]) + '\n')
+        (self.repo / 'env').write_text('\n'.join(f'{key}={shlex.quote(str(value))}' for key, value in [('TOOLSHED_DOWNLOAD_DIR', self.cache), ('TOOLSHED_BIN_DIR', self.bin), ('TOOLSHED_OPT_DIR', self.opt)]) + '\n')
         self.archive = self.root / 'java.tar.gz'
         with tarfile.open(self.archive, 'w:gz') as tar:
             for name, content in [('java', b'#!/bin/sh\necho "java 25.0.5 2026-10-20"\n'), ('javac', b'#!/bin/sh\necho "javac 25.0.5"\n')]:

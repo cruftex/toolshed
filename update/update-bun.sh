@@ -10,8 +10,9 @@ release_info oven-sh/bun bun-v "$staging/release"
 version=$(cat "$staging/release")
 asset=bun-linux-x64.zip
 archive_sha=$(release_asset_digest "$staging/release" "$asset")
-archive="$DOWNLOAD_DIR/bun-v$version-linux-x64.zip"
-download_verified "https://github.com/oven-sh/bun/releases/download/bun-v$version/$asset" "$archive_sha" "$archive"
+url="https://github.com/oven-sh/bun/releases/download/bun-v$version/$asset"
+archive=$(cache_path "$url")
+download_verified "$url" "$archive_sha" "$archive"
 extract_zip_member "$archive" bun-linux-x64/bun binary
 binary_sha=$(sha256sum < "$binary"); binary_sha=${binary_sha%% *}
 verify_version "$binary" "$version"

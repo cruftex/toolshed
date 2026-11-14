@@ -1,19 +1,18 @@
 # Reproducible development environment
 
-Except for Claude Code (see below), every installer must reproduce a specific tool
-version. Pin the version, use a version-specific download URL, and embed the
+Every installer must reproduce a specific tool version. Pin the version, use a version-specific download URL, and embed the
 expected SHA-256 in the installer.
 Do not discover `latest` at runtime, accept version overrides, run unpinned remote
 installation scripts, or upgrade tools automatically.
 
 ## Downloads and verification
 
-- Claude Code is exempt from version and embedded SHA-256 pins: resolve the latest
-  release when its installer is run, authenticate the versioned manifest with
+- Claude Code uses a pinned version and is exempt from embedded SHA-256 pins:
+  authenticate the versioned manifest with
   Anthropic's GPG key fingerprint `31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE`, and
   verify the executable against that signed manifest before execution or install.
-  Check that the manifest version matches the resolved release. Cache downloads
-  under `~/.cache/toolshed` (configured by `DOWNLOAD_DIR`), by tool and version;
+  Check that the manifest version matches the pinned release. Cache downloads
+  under `~/.cache/toolshed/downloads` (configured by `TOOLSHED_DOWNLOAD_DIR`), by tool and version;
   reverify cached signatures and executable checksums before reuse. Keep Claude's
   built-in updater disabled so upgrades happen through the verified installer.
 
@@ -55,12 +54,12 @@ installation scripts, or upgrade tools automatically.
 - Call staging helpers directly, not in command substitutions or subshells, so
   cleanup can track their temporary directories. Do not replace the library traps.
 - Use the directories in `env`. Do not invoke sudo or edit shell profiles.
-  Users must put `DEST_BIN_DIR` on their `PATH` themselves.
-- Install self-contained, single-file executables directly into `DEST_BIN_DIR`.
+  Users must put `TOOLSHED_BIN_DIR` on their `PATH` themselves.
+- Install self-contained, single-file executables directly into `TOOLSHED_BIN_DIR`.
   Install packages with multiple runtime files into
-  `$DEST_OPT_DIR/<tool>/<version>/`, preserving their layout, and link their
-  executable entry points into `DEST_BIN_DIR`.
-- `DEST_OPT_DIR` defaults to `~/opt`; it may be configured as `/opt` for a
+  `$TOOLSHED_OPT_DIR/<tool>/<version>/`, preserving their layout, and link their
+  executable entry points into `TOOLSHED_BIN_DIR`.
+- `TOOLSHED_OPT_DIR` defaults to `~/opt`; it may be configured as `/opt` for a
   system-wide installation with appropriate existing write permissions.
 - Check prerequisites as needed, stage changes before replacing executables, and
   clean up temporary files on success, failure, or interruption.

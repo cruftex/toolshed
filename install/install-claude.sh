@@ -6,8 +6,8 @@ base_url=https://downloads.claude.ai/claude-code-releases
 platform=$(platform_string)
 platform=${platform/aarch64/arm64}
 case $platform in linux-x64|linux-arm64) ;; *) _installer_fail "Unsupported Claude platform: $platform" ;; esac
-resolve_latest_version "$base_url/latest" version
-cache="$DOWNLOAD_DIR/claude/$version"
+version=$(read_version_pin claude)
+cache=$(cache_path "$base_url/$version")
 download_signed_manifest "$base_url/$version/manifest.json" https://downloads.claude.ai/keys/claude-code.asc \
     31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE "$cache/manifest"
 checksum=$(manifest_checksum "$cache/manifest/manifest.json" "$version" "$platform")
@@ -19,5 +19,5 @@ if ! binary_is_installed claude "$checksum"; then
     verify_version "$binary" "$version (Claude Code)"
     install_binary "$binary" claude
 fi
-set_json_env "$HOME/.claude/settings.json" DISABLE_UPDATES 1
-printf 'Claude Code %s is installed in %s; built-in updates disabled.\n' "$version" "$DEST_BIN_DIR"
+set_json_env "$TOOLSHED_CLAUDE_SETTINGS" DISABLE_UPDATES 1
+printf 'Claude Code %s is installed in %s; built-in updates disabled.\n' "$version" "$TOOLSHED_BIN_DIR"

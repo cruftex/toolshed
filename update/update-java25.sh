@@ -21,7 +21,7 @@ url="https://download.oracle.com/java/25/archive/jdk-${version}_linux-x64_bin.ta
 _installer_download "$url.sha256" "$staging/checksum"
 checksum=$(cat "$staging/checksum")
 [[ $checksum =~ ^[0-9a-f]{64}$ ]] || _installer_fail 'Invalid Oracle checksum.'
-archive="$DOWNLOAD_DIR/java25/$version/jdk-$version-linux-x64.tar.gz"
+archive=$(cache_path "$url")
 download_verified "$url" "$checksum" "$archive"
 tar -xzf "$archive" -C "$staging" || _installer_fail 'Cannot extract Java archive.'
 java_is_installed "$staging/jdk-$version" "$version" || _installer_fail "Java $version validation failed."

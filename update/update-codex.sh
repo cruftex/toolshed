@@ -11,9 +11,10 @@ version=$(cat "$staging/release")
 for index in 0 1; do
     if (( index == 0 )); then name=codex; else name=codex-code-mode-host; fi
     asset="$name-x86_64-unknown-linux-musl"
-    archive="$DOWNLOAD_DIR/codex/$version/$asset.tar.gz"
+    url="https://github.com/openai/codex/releases/download/rust-v$version/$asset.tar.gz"
+    archive=$(cache_path "$url")
     archive_sha=$(release_asset_digest "$staging/release" "$asset.tar.gz")
-    download_verified "https://github.com/openai/codex/releases/download/rust-v$version/$asset.tar.gz" "$archive_sha" "$archive"
+    download_verified "$url" "$archive_sha" "$archive"
     printf '%s\n' "$archive_sha" > "$staging/$name.archive-sha256"
     tar -xOzf "$archive" "$asset" > "$staging/$name" || _installer_fail "Cannot extract $name."
     [[ -s $staging/$name ]] || _installer_fail "Empty $name executable."
@@ -21,6 +22,9 @@ for index in 0 1; do
     sha256sum < "$staging/$name" | cut -d ' ' -f 1 > "$staging/$name.sha256"
 done
 verify_version "$staging/codex" "codex-cli $version"
+for name in codex codex-code-mode-host; do
+    check_recorded_checksums "$name" "$version/linux-x64" "$(cat "$staging/$name.archive-sha256")" "$(cat "$staging/$name.sha256")"
+done
 for name in codex codex-code-mode-host; do
     record_checksums "$name" "$version/linux-x64" "$(cat "$staging/$name.archive-sha256")" "$(cat "$staging/$name.sha256")"
 done

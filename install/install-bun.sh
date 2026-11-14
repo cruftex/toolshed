@@ -9,8 +9,9 @@ key="$version/$platform"
 load_binary_checksums bun "$key"
 [[ ${archive_sha256[$key]:-} && ${binary_sha256[$key]:-} ]] ||
     _installer_fail "No pinned Bun checksums for $key."
-archive="$DOWNLOAD_DIR/bun-v$version-$platform.zip"
 url="https://github.com/oven-sh/bun/releases/download/bun-v$version/bun-$platform.zip"
+
+archive=$(cache_path "$url")
 
 if ! binary_is_installed bun "${binary_sha256[$key]}"; then
     download_verified "$url" "${archive_sha256[$key]}" "$archive"
@@ -20,4 +21,4 @@ if ! binary_is_installed bun "${binary_sha256[$key]}"; then
     install_binary "$binary" bun
 fi
 install_symlink bun bunx
-printf 'Bun %s is installed in %s\n' "$version" "$DEST_BIN_DIR"
+printf 'Bun %s is installed in %s\n' "$version" "$TOOLSHED_BIN_DIR"

@@ -1,6 +1,8 @@
 # Installation directories
 
-DOWNLOAD_DIR=~/.cache/toolshed
-DEST_BIN_DIR=~/.local/bin
-DEST_OPT_DIR=~/opt
+TOOLSHED_DOWNLOAD_DIR=~/.cache/toolshed/downloads
+TOOLSHED_BIN_DIR=~/.local/bin
+TOOLSHED_OPT_DIR=~/opt
 
+TOOLSHED_NVM_DIR=~/.nvm
+TOOLSHED_CLAUDE_SETTINGS=~/.claude/settings.json

@@ -21,16 +21,17 @@ class InstallerTests(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
         self.repo = self.root / "repository with spaces"
-        for directory in ("install", "lib", "metadata", "pins"):
+        for directory in ("install", "lib", "metadata", "pins", "update"):
             shutil.copytree(ROOT / directory, self.repo / directory)
         self.downloads = self.root / "download cache"
         self.bin = self.root / "destination bin"
         self.staging = self.root / "temporary staging"
         self.staging.mkdir()
         (self.repo / "env").write_text(
-            f"DOWNLOAD_DIR={shlex.quote(str(self.downloads))}\n"
-            f"DEST_BIN_DIR={shlex.quote(str(self.bin))}\n"
-            f"DEST_OPT_DIR={shlex.quote(str(self.root / 'opt'))}\n"
+            f"TOOLSHED_DOWNLOAD_DIR={shlex.quote(str(self.downloads))}\n"
+            f"TOOLSHED_BIN_DIR={shlex.quote(str(self.bin))}\n"
+            f"TOOLSHED_OPT_DIR={shlex.quote(str(self.root / 'opt'))}\n"
+            f"TOOLSHED_CLAUDE_SETTINGS={shlex.quote(str(self.root / 'home/.claude/settings.json'))}\n"
         )
         self.archive = self.root / "fixture.zip"
         with zipfile.ZipFile(self.archive, "w") as archive:
@@ -254,7 +255,7 @@ class InstallerTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual((self.bin / "bun").read_bytes(), binary)
-        self.assertEqual((self.downloads / "bun-v9.9.9-linux-aarch64.zip").read_bytes(), self.archive.read_bytes())
+        self.assertEqual((self.downloads / "github.com/oven-sh/bun/releases/download/bun-v9.9.9/bun-linux-aarch64.zip").read_bytes(), self.archive.read_bytes())
         self.assertEqual(subprocess.check_output([self.bin / "bunx", "--version"], text=True), "9.9.9\n")
         self.assert_no_temporary_files()
 
@@ -294,9 +295,22 @@ class InstallerTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("Required utility not found", result.stderr)
 
+    def test_cache_paths_distinguish_hosts_and_vendors_and_reject_unsafe_urls(self):
+        for url in ("https://github.com/vendor-one/tool/releases/v1/file.zip",
+                    "https://github.com/vendor-two/tool/releases/v1/file.zip",
+                    "https://example.com/vendor-one/tool/releases/v1/file.zip"):
+            result = self.run_helper(f"cache_path {url}")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout.strip(), str(self.downloads / url.removeprefix("https://")))
+        for url in ("https://example.com/a/../file", "https://example.com/a/file?x=1", "http://example.com/a/file"):
+            result = self.run_helper(f"cache_path '{url}'")
+            self.assertNotEqual(result.returncode, 0)
+
     def test_bun_checksum_failure_preserves_existing_installation(self):
         self.downloads.mkdir()
-        (self.downloads / "bun-v1.4.4-linux-x64.zip").write_bytes(b"corrupt")
+        cache = self.downloads / "github.com/oven-sh/bun/releases/download/bun-v1.4.4/bun-linux-x64.zip"
+        cache.parent.mkdir(parents=True)
+        cache.write_bytes(b"corrupt")
         self.bin.mkdir()
         (self.bin / "bun").write_text("previous Bun")
         result = subprocess.run(
@@ -316,6 +330,7 @@ class InstallerTests(unittest.TestCase):
         binary = b"#!/bin/sh\nprintf '2.1.322 (Claude Code)\\n'\n"
         (release / "claude").write_bytes(binary)
         (release / "latest").write_text("2.1.322")
+        (self.repo / "pins/claude").write_text("2.1.322\n")
         (release / "key.asc").write_text("31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE")
         digest = hashlib.sha256(binary).hexdigest()
         self.write_mock_manifest(release, {"version": "2.1.322", "platforms": {
@@ -395,7 +410,7 @@ elif '--import' not in sys.argv:
             "theme": "dark", "env": {"OTHER": "keep", "DISABLE_UPDATES": "1"},
         })
         self.assertEqual(settings.stat().st_mode & 0o777, 0o640)
-        cache = self.downloads / "claude/2.1.322/linux-x64/claude"
+        cache = self.downloads / "downloads.claude.ai/claude-code-releases/2.1.322/linux-x64/claude"
         self.assertEqual(cache.read_bytes(), binary)
         # Reinstall modified bytes from cache without downloading metadata/binary.
         self.calls.unlink()
@@ -403,15 +418,14 @@ elif '--import' not in sys.argv:
         reinstall = self.run_claude()
         self.assertEqual(reinstall.returncode, 0, reinstall.stderr)
         self.assertEqual(installed.read_bytes(), binary)
-        self.assertEqual(self.calls.read_text().splitlines(), ["called"])
+        self.assertFalse(self.calls.exists())
         # A matching installation does not need the binary download cache.
         cache.unlink()
-        self.calls.unlink()
         before = installed.stat()
         repeat = self.run_claude()
         self.assertEqual(repeat.returncode, 0, repeat.stderr)
         self.assertEqual(installed.stat().st_ino, before.st_ino)
-        self.assertEqual(self.calls.read_text().splitlines(), ["called"])
+        self.assertFalse(self.calls.exists())
         self.assert_no_temporary_files()
 
     def test_claude_verification_failures_preserve_existing_binary(self):
@@ -465,7 +479,7 @@ elif '--import' not in sys.argv:
         self.assertEqual(first.returncode, 0, first.stderr)
         installed = self.bin / "claude"
         installed.write_text("existing installation")
-        cache = self.downloads / "claude/2.1.322"
+        cache = self.downloads / "downloads.claude.ai/claude-code-releases/2.1.322"
         manifest = cache / "manifest/manifest.json"
         original = manifest.read_bytes()
         for target in (manifest, cache / "linux-x64/claude"):
@@ -481,7 +495,7 @@ elif '--import' not in sys.argv:
         _, release, _ = self.prepare_claude_fixture()
         for version in ("../escape", "latest", "2.1.322/../../escape"):
             (release / "latest").write_text(version)
-            result = self.run_claude()
+            result = subprocess.run([self.repo / "update/update-claude.sh"], cwd=self.root, env=self.env, capture_output=True, text=True)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("Invalid latest release version", result.stderr)
             self.assertFalse(self.bin.exists())
@@ -494,18 +508,19 @@ elif '--import' not in sys.argv:
         self.write_mock_manifest(release, {"version": "2.1.323", "platforms": {
             "linux-x64": {"checksum": hashlib.sha256(binary).hexdigest()},
         }})
-        upgrade = self.run_claude()
+        upgrade = subprocess.run([self.repo / "update/update-claude.sh"], cwd=self.root, env=self.env, capture_output=True, text=True)
         self.assertEqual(upgrade.returncode, 0, upgrade.stderr)
         self.assertEqual((self.bin / "claude").read_bytes(), binary)
-        self.assertTrue((self.downloads / "claude/2.1.322/linux-x64/claude").exists())
-        self.assertTrue((self.downloads / "claude/2.1.323/linux-x64/claude").exists())
+        self.assertEqual((self.repo / "pins/claude").read_text(), "2.1.323\n")
+        self.assertTrue((self.downloads / "downloads.claude.ai/claude-code-releases/2.1.322/linux-x64/claude").exists())
+        self.assertTrue((self.downloads / "downloads.claude.ai/claude-code-releases/2.1.323/linux-x64/claude").exists())
 
     def test_claude_download_failure_and_interrupt_cleanup(self):
         self.prepare_claude_fixture()
         self.bin.mkdir()
         installed = self.bin / "claude"
         installed.write_text("existing installation")
-        for asset in ("latest", "manifest.json", "manifest.json.sig", "claude-code.asc", "/linux-x64/claude"):
+        for asset in ("manifest.json", "manifest.json.sig", "claude-code.asc", "/linux-x64/claude"):
             for mode in ("fail", "interrupt"):
                 with self.subTest(asset=asset, mode=mode):
                     shutil.rmtree(self.downloads, ignore_errors=True)
@@ -513,6 +528,16 @@ elif '--import' not in sys.argv:
                     self.assertNotEqual(result.returncode, 0)
                     self.assertEqual(installed.read_text(), "existing installation")
                     self.assert_no_temporary_files()
+
+    def test_claude_updater_rejects_invalid_manifest_without_changing_pin(self):
+        _, release, _ = self.prepare_claude_fixture()
+        (release / "latest").write_text("2.1.323")
+        (release / "manifest.json.sig").write_text("invalid")
+        result = subprocess.run([self.repo / "update/update-claude.sh"], cwd=self.root,
+                                env=self.env, capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual((self.repo / "pins/claude").read_text(), "2.1.322\n")
+        self.assertFalse((self.bin / "claude").exists())
 
     def test_claude_platform_mapping_and_unsupported_hosts(self):
         self.prepare_claude_fixture()
@@ -524,7 +549,7 @@ elif '--import' not in sys.argv:
                 result = self.run_claude(MOCK_OS=system, MOCK_ARCH=arch)
                 if system == "Linux":
                     self.assertEqual(result.returncode, 0, result.stderr)
-                    self.assertTrue((self.downloads / "claude/2.1.322/linux-arm64/claude").exists())
+                    self.assertTrue((self.downloads / "downloads.claude.ai/claude-code-releases/2.1.322/linux-arm64/claude").exists())
                 else:
                     self.assertNotEqual(result.returncode, 0)
                     self.assertIn("Unsupported Claude platform", result.stderr)
@@ -532,7 +557,8 @@ elif '--import' not in sys.argv:
     @unittest.skipUnless(os.environ.get("BUN_TEST_ARCHIVE"), "Set BUN_TEST_ARCHIVE to a real Bun archive")
     def test_real_bun_installation_and_repeat(self):
         self.downloads.mkdir()
-        cache = self.downloads / "bun-v1.4.4-linux-x64.zip"
+        cache = self.downloads / "github.com/oven-sh/bun/releases/download/bun-v1.4.4/bun-linux-x64.zip"
+        cache.parent.mkdir(parents=True)
         shutil.copyfile(os.environ["BUN_TEST_ARCHIVE"], cache)
         binary_stat = None
         for _ in range(2):
@@ -562,6 +588,7 @@ elif '--import' not in sys.argv:
         with installed.open("ab") as binary:
             binary.write(b"\nmodified\n")
         self.assertEqual(subprocess.check_output([installed, "--version"], text=True), "1.4.4\n")
+        cache.parent.mkdir(parents=True)
         shutil.copyfile(os.environ["BUN_TEST_ARCHIVE"], cache)
         result = subprocess.run(
             [self.repo / "install/install-bun.sh"], cwd=self.root,

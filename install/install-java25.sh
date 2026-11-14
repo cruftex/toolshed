@@ -7,14 +7,15 @@ platform=$(platform_string)
 source "$_installer_library_dir/../metadata/java25.sh"
 checksum=${checksums[archive/$version/$platform]:-}
 [[ $checksum ]] || _installer_fail "No pinned Java checksums for $version/$platform."
-jdk_home="$DEST_OPT_DIR/java25/$version"
+jdk_home="$TOOLSHED_OPT_DIR/java25/$version"
 if ! java_is_installed "$jdk_home" "$version"; then
     [[ ! -e $jdk_home && ! -L $jdk_home ]] || _installer_fail "Incomplete Java installation: $jdk_home"
-    archive="$DOWNLOAD_DIR/java25/$version/jdk-$version-linux-x64.tar.gz"
-    download_verified "https://download.oracle.com/java/25/archive/jdk-${version}_linux-x64_bin.tar.gz" "$checksum" "$archive"
+    url="https://download.oracle.com/java/25/archive/jdk-${version}_linux-x64_bin.tar.gz"
+    archive=$(cache_path "$url")
+    download_verified "$url" "$checksum" "$archive"
     _installer_require tar mkdir mv
-    mkdir -p -- "$DEST_OPT_DIR/java25"
-    stage_directory staging "$DEST_OPT_DIR/java25"
+    mkdir -p -- "$TOOLSHED_OPT_DIR/java25"
+    stage_directory staging "$TOOLSHED_OPT_DIR/java25"
     tar -xzf "$archive" -C "$staging" || _installer_fail 'Cannot extract Java archive.'
     java_is_installed "$staging/jdk-$version" "$version" || _installer_fail "Java $version validation failed."
     [[ ! -e $jdk_home && ! -L $jdk_home ]] || _installer_fail "Java destination appeared during staging: $jdk_home"
