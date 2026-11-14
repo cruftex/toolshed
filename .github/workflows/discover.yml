@@ -23,37 +23,6 @@ jobs:
           fetch-depth: 0
       - name: Pull latest main
         run: git pull --ff-only origin main
-      - name: Discover and verify releases
-        id: discovery
+      - name: Discover, verify, and commit releases
         shell: bash
-        run: |
-          set -euo pipefail
-          for script in discover/discover-*.sh; do
-            echo "Running $script"
-            version=$("$script")
-            [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Invalid discovered version: $version" >&2; exit 1; }
-            echo "Discovered $version"
-            if [[ -n $(git status --porcelain -- metadata) ]]; then
-              tool=${script#discover/discover-}
-              tool=${tool%.sh}
-              printf 'tool=%s\nversion=%s\n' "$tool" "$version" >> "$GITHUB_OUTPUT"
-              echo "New metadata found by $script; leaving remaining tools for a later run."
-              break
-            fi
-          done
-      - name: Commit metadata to main
-        shell: bash
-        env:
-          DISCOVERED_TOOL: ${{ steps.discovery.outputs.tool }}
-          DISCOVERED_VERSION: ${{ steps.discovery.outputs.version }}
-        run: |
-          set -euo pipefail
-          git add -- metadata
-          if git diff --cached --quiet; then
-            echo 'No new release metadata.'
-            exit 0
-          fi
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m "Update: $DISCOVERED_TOOL $DISCOVERED_VERSION"
-          git push origin HEAD:main
+        run: .github/scripts/discover.sh

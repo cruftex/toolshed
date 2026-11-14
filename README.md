@@ -15,6 +15,40 @@ find and cache new releases.
 
 ## Available tools
 
+The table shows the latest version recorded in this checkout, which may differ
+from the default pin and from the latest upstream release. Regenerate it after
+metadata changes with `./update-readme.py`.
+
+<!-- tools-table:start -->
+| Tool | Latest recorded version | Install strategy |
+| --- | --- | --- |
+| [bun](install/install-bun.sh) | 1.4.4 | Verified executable in bin |
+| [claude](install/install-claude.sh) | 2.1.325 | Signed manifest; executable in bin |
+| [cloud-provider-kind](install/install-cloud-provider-kind.sh) | 0.12.0 | Verified executable in bin |
+| [clusterctl](install/install-clusterctl.sh) | 1.14.4 | Verified executable in bin |
+| [codex](install/install-codex.sh) | 0.169.0 | Verified executables in bin |
+| [controller-gen](install/install-controller-gen.sh) | 0.23.0 | Verified executable in bin |
+| [cosign](install/install-cosign.sh) | 3.1.4 | Verified executable in bin |
+| [crane](install/install-crane.sh) | 0.22.1 | Verified executable in bin |
+| [go](install/install-go.sh) | 1.27.4 | Verified package in opt; entry points in bin |
+| [golangci-lint](install/install-golangci-lint.sh) | 2.15.0 | Verified executable in bin |
+| [helm](install/install-helm.sh) | 3.19.0 | Verified executable in bin |
+| [java25](install/install-java25.sh) | 25.0.5 | Verified package in opt; entry points in bin; source [`profile.d/java25.sh`](profile.d/java25.sh) |
+| [kind](install/install-kind.sh) | 0.30.0 | Verified executable in bin |
+| [kubebuilder](install/install-kubebuilder.sh) | 4.16.0 | Verified executable in bin |
+| [kubectl](install/install-kubectl.sh) | 1.34.1 | Verified executable in bin |
+| [kustomize](install/install-kustomize.sh) | 5.8.3 | Verified executable in bin |
+| [maven310](install/install-maven310.sh) | 3.10.0 | Verified package in opt; entry points in bin |
+| [maven39](install/install-maven39.sh) | 3.9.16 | Verified package in opt; entry points in bin |
+| [mvnd](install/install-mvnd.sh) | 1.0.6 | Verified package in opt; entry points in bin |
+| [node24](install/install-node24.sh) | 24.22.3 | Verified archive in NVM directory; source [`profile.d/node24.sh`](profile.d/node24.sh) |
+| [nvm](install/install-nvm.sh) | 0.41.0 | Verified Git archive in NVM directory |
+| [setup-envtest](install/install-setup-envtest.sh) | 0.25.2 | Verified executable in bin |
+| [trivy](install/install-trivy.sh) | 0.76.2 | Verified executable in bin |
+| [vegeta](install/install-vegeta.sh) | 12.13.0 | Verified executable in bin |
+| [yq](install/install-yq.sh) | 4.54.3 | Verified executable in bin |
+<!-- tools-table:end -->
+
 Run `./install/install-toolshed.sh` to link `shed` into `TOOLSHED_BIN_DIR`,
 then run `shed available` to see tools, their default pins, and recorded versions.
 The link points into this checkout, which must remain in place. You can also
@@ -89,6 +123,7 @@ for archive checksums, sources, and smoke tests.
 
 The GitHub Actions discovery workflow runs daily and can also be started manually.
 It checks discovery scripts on Linux x86_64 until one produces new metadata, then
-commits that tool's verified metadata to `main`. A failed discovery stops the run
-without a commit; remaining tools are checked on a later run. Repository settings must permit the
+scans every tool and commits each tool's verified metadata separately to `main`.
+If a discovery fails, the workflow continues scanning other tools and reports a
+failure after pushing successful commits. Repository settings must permit the
 workflow token to push to `main`, including any applicable branch protection rules.
