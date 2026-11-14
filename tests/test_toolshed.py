@@ -88,7 +88,13 @@ class ToolshedCommandTests(unittest.TestCase):
                 script.write_text(f'#!/bin/sh\nprintf "%s" "${{TOOLSHED_OVERRIDE_TOOL_VERSION-unset}}" > "{root / directory}"\nprintf "3.0.0\\n"\n')
                 script.chmod(0o755)
             shed = repo / 'bin/shed'
-            env = dict(os.environ, TOOLSHED_OVERRIDE_TOOL_VERSION='9.9.9')
+            commands = root / 'commands'
+            commands.mkdir()
+            git = commands / 'git'
+            git.write_text('#!/bin/sh\nexit 0\n')
+            git.chmod(0o755)
+            env = dict(os.environ, TOOLSHED_OVERRIDE_TOOL_VERSION='9.9.9',
+                       PATH=f'{commands}:{os.environ["PATH"]}')
             result = subprocess.run([shed, 'installed'], cwd=root, env=env, capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn('1.0.0', result.stdout)
@@ -130,6 +136,40 @@ class ToolshedCommandTests(unittest.TestCase):
             result = subprocess.run([shed, 'discover'], cwd=root, env=env, capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn('nvm: no internet updater available', result.stdout)
+
+    def test_discovery_pulls_before_running_and_stops_on_failure(self):
+        with tempfile.TemporaryDirectory(prefix='shed pull ') as tmp:
+            root = Path(tmp)
+            repo = root / 'checkout with spaces'
+            for directory in ('bin', 'lib', 'pins', 'metadata'):
+                shutil.copytree(ROOT / directory, repo / directory)
+            (repo / 'discover').mkdir()
+            bindir = root / 'local bin'
+            bindir.mkdir()
+            (repo / 'env').write_text('\n'.join(
+                f'{key}={shlex.quote(str(value))}' for key, value in (
+                    ('TOOLSHED_BIN_DIR', bindir), ('TOOLSHED_OPT_DIR', root / 'opt'),
+                    ('TOOLSHED_NVM_DIR', root / 'nvm'))) + '\n')
+            bun = bindir / 'bun'
+            bun.write_text('#!/bin/sh\necho 1.0.0\n')
+            bun.chmod(0o755)
+            discovery = repo / 'discover/discover-bun.sh'
+            discovery.write_text(f'#!/bin/sh\ntest -f {shlex.quote(str(root / "pulled"))} || exit 1\necho 1.0.0\n')
+            discovery.chmod(0o755)
+            commands = root / 'commands'
+            commands.mkdir()
+            git = commands / 'git'
+            git.write_text(f'#!/bin/sh\n[ "$1" = -C ] && [ "$2" = {shlex.quote(str(repo))} ] && [ "$3" = pull ] && [ "$4" = --ff-only ] || exit 2\ntouch {shlex.quote(str(root / "pulled"))}\n')
+            git.chmod(0o755)
+            env = dict(os.environ, PATH=f'{commands}:{os.environ["PATH"]}')
+            result = subprocess.run([repo / 'bin/shed', 'discover'], cwd=root, env=env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('no newer release', result.stdout)
+            (root / 'pulled').unlink()
+            git.write_text('#!/bin/sh\nexit 1\n')
+            result = subprocess.run([repo / 'bin/shed', 'discover'], cwd=root, env=env, capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertNotIn('checking for releases', result.stdout)
 
     def test_installer_link_and_existing_command(self):
         with tempfile.TemporaryDirectory(prefix='shed installer ') as tmp:

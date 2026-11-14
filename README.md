@@ -62,9 +62,10 @@ uses its own bundled Maven and does not enable the Maven Build Cache Extension.
   recorded for the current platform. It checks configured locations offline.
 - `shed update` updates installed tools to the newest compatible version already
   recorded in this checkout, then moves each pin after installation succeeds.
-- `shed discover` checks the internet for releases, verifies and caches them,
+- `shed discover` first pulls the checkout's upstream changes using a fast-forward
+  only pull, then checks the internet for releases, verifies and caches them,
   and records their metadata. It does not install them or change pins; tools
-  without an updater are reported and skipped.
+  without an updater are reported and skipped. Discovery stops if the pull fails.
 
 Only tools found in Toolshed’s configured directories are considered. Node
 status lists installed Node 24 versions and compares the newest one. NVM updates
@@ -85,3 +86,9 @@ them. Normal installers use the repository’s pins unless a version is selected
 Claude’s built-in updater is disabled; use `shed discover` and `shed update`. Downloads, including cached files, are
 verified before use. See [release verification records](docs/release-verification.md)
 for archive checksums, sources, and smoke tests.
+
+The GitHub Actions discovery workflow runs daily and can also be started manually.
+It checks discovery scripts on Linux x86_64 until one produces new metadata, then
+commits that tool's verified metadata to `main`. A failed discovery stops the run
+without a commit; remaining tools are checked on a later run. Repository settings must permit the
+workflow token to push to `main`, including any applicable branch protection rules.
