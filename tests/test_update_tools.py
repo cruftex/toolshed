@@ -49,6 +49,7 @@ if [[ $url == */latest ]]; then cp "$FIXTURE/release.json" "$out"; else cp "$FIX
             metadata = (repo / 'metadata/bun.sh').read_text()
             self.assertEqual(metadata.count('archive/1.5.0/linux-x64'), 1)
             self.assertEqual(metadata.count('binary/1.5.0/linux-x64'), 1)
+            self.assertRegex(metadata, r'# Discovered at \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\nchecksums\[archive/1\.5\.0/linux-x64\]=[^\n]+\nchecksums\[binary/1\.5\.0/linux-x64\]=')
 
     def test_kubernetes_discovery_and_install_from_cache(self):
         with tempfile.TemporaryDirectory(prefix='kubernetes discovery ') as temp:

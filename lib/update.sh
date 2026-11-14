@@ -35,8 +35,11 @@ record_checksums() {
     check_recorded_checksums "$name" "$key" "$archive" "$binary"
     local -A checksums=()
     source "$_installer_library_dir/../metadata/$name.sh"
-    [[ ${checksums[archive/$key]+present} ]] || printf '\nchecksums[archive/%s]=%s\n' "$key" "$archive" >> "$_installer_library_dir/../metadata/$name.sh"
-    [[ ${checksums[binary/$key]+present} ]] || printf '\nchecksums[binary/%s]=%s\n' "$key" "$binary" >> "$_installer_library_dir/../metadata/$name.sh"
+    if [[ ! ${checksums[archive/$key]+present} || ! ${checksums[binary/$key]+present} ]]; then
+        printf '\n# Discovered at %s\n' "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$_installer_library_dir/../metadata/$name.sh"
+        [[ ${checksums[archive/$key]+present} ]] || printf 'checksums[archive/%s]=%s\n' "$key" "$archive" >> "$_installer_library_dir/../metadata/$name.sh"
+        [[ ${checksums[binary/$key]+present} ]] || printf 'checksums[binary/%s]=%s\n' "$key" "$binary" >> "$_installer_library_dir/../metadata/$name.sh"
+    fi
     return 0
 }
 write_version_pin() {
