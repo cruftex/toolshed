@@ -37,9 +37,9 @@ def executable_version(path, args=('--version',)):
 def installed_tools():
     result = {}
     for name, filename in [('bun', 'bun'), ('claude', 'claude'), ('codex', 'codex'),
-                           ('vegeta', 'vegeta'), ('java25', 'java'),
+                           ('vegeta', 'vegeta'), ('helm', 'helm'), ('kubectl', 'kubectl'), ('java25', 'java'),
                            ('maven39', 'mvn39'), ('maven310', 'mvn310')]:
-        version = executable_version(bin_dir / filename)
+        version = executable_version(bin_dir / filename, ('version', '--client') if name == 'kubectl' else (('version', '--short') if name == 'helm' else ('--version',)))
         if version is not None:
             result[name] = version
     mvnd = bin_dir / 'mvnd'
@@ -113,7 +113,7 @@ for key in "${!archive_sha256[@]}"; do printf 'archive/%s\\n' "$key"; done'''
                 continue
             if name == 'maven310' and not version.startswith('3.10.'):
                 continue
-            if name in ('bun', 'vegeta', 'codex') and f'binary/{version}/{platform}' not in entries:
+            if name in ('bun', 'vegeta', 'codex', 'helm', 'kubectl') and f'binary/{version}/{platform}' not in entries:
                 continue
             if host_entries is not None and not {f'archive/{version}/{platform}', f'binary/{version}/{platform}'} <= host_entries:
                 continue

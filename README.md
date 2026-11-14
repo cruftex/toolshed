@@ -26,12 +26,15 @@ Install a tool with its `install/install-<tool>.sh` script; for example:
 TOOLSHED_OVERRIDE_TOOL_VERSION=3.9.16 ./install/install-maven39.sh
 ```
 
-Java, Maven, Maven Daemon, Bun, Codex, Node and NVM currently support Linux
+Java, Maven, Maven Daemon, Bun, Codex, Node, NVM, kubectl and Helm currently support Linux
 x86_64 with glibc. Claude also supports Linux arm64 with glibc; Vegeta supports
 Linux and macOS on x86_64 and arm64. Installers reject unsupported platforms.
 Set `TOOLSHED_OVERRIDE_TOOL_VERSION` for a single installer invocation to select
 a recorded version without changing the default pin; availability depends on
 the platform. Claude accepts versions verified by its signed manifest.
+
+kubectl provides the Kubernetes CLI (including Kustomize); Helm manages Kubernetes packages.
+Choose a kubectl version compatible with your cluster.
 
 ## Activation
 

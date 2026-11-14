@@ -50,6 +50,63 @@ if [[ $url == */latest ]]; then cp "$FIXTURE/release.json" "$out"; else cp "$FIX
             self.assertEqual(metadata.count('archive/1.5.0/linux-x64'), 1)
             self.assertEqual(metadata.count('binary/1.5.0/linux-x64'), 1)
 
+    def test_kubernetes_discovery_and_install_from_cache(self):
+        with tempfile.TemporaryDirectory(prefix='kubernetes discovery ') as temp:
+            root = Path(temp)
+            repo = root / 'repo'
+            for directory in ('install', 'lib', 'metadata', 'pins', 'discover'):
+                shutil.copytree(ROOT / directory, repo / directory)
+            (repo / 'env').write_text('\n'.join(f'{key}={shlex.quote(str(root / value))}' for key, value in [('TOOLSHED_DOWNLOAD_DIR', 'cache'), ('TOOLSHED_BIN_DIR', 'bin'), ('TOOLSHED_OPT_DIR', 'opt')]) + '\n')
+            commands = root / 'commands'
+            commands.mkdir()
+            curl = commands / 'curl'
+            curl.write_text("""#!/bin/bash
+while (($#)); do
+ case $1 in https://*) url=$1 ;; --output) out=$2; shift ;; esac
+ shift
+done
+if [[ $url == */latest ]]; then cp "$FIXTURE/release.json" "$out"; else cp "$FIXTURE/${url##*/}" "$out"; fi
+""")
+            curl.chmod(0o755)
+            env = dict(os.environ, PATH=f'{commands}:{os.environ["PATH"]}', FIXTURE=str(root))
+            for tool, version in [('kubectl', '1.35.1'), ('helm', '3.20.1')]:
+                with self.subTest(tool=tool):
+                    (root / 'release.json').write_text(json.dumps({'tag_name': 'v' + version, 'draft': False, 'prerelease': False}))
+                    if tool == 'kubectl':
+                        asset = 'kubectl'
+                        (root / asset).write_bytes(f"#!/bin/sh\nprintf 'Client Version: v{version}\\n'\n".encode())
+                    else:
+                        asset = f'helm-v{version}-linux-amd64.tar.gz'
+                        binary = f"#!/bin/sh\nprintf 'v{version}+test\\n'\n".encode()
+                        with tarfile.open(root / asset, 'w:gz') as tar:
+                            member = tarfile.TarInfo('linux-amd64/helm')
+                            member.size = len(binary)
+                            tar.addfile(member, io.BytesIO(binary))
+                    digest = hashlib.sha256((root / asset).read_bytes()).hexdigest()
+                    checksum_name = asset + ('.sha256' if tool == 'kubectl' else '.sha256sum')
+                    (root / checksum_name).write_text(digest + ('' if tool == 'kubectl' else '  ' + asset) + '\n')
+                    pin = (repo / 'pins' / tool).read_text()
+                    for _ in range(2):
+                        result = subprocess.run([repo / 'discover' / f'discover-{tool}.sh'], env=env, capture_output=True, text=True)
+                        self.assertEqual(result.returncode, 0, result.stderr)
+                        self.assertEqual(result.stdout.strip(), version)
+                    self.assertEqual((repo / 'pins' / tool).read_text(), pin)
+                    metadata = (repo / 'metadata' / f'{tool}.sh').read_text()
+                    self.assertEqual(metadata.count(f'archive/{version}/linux-x64'), 1)
+                    env['TOOLSHED_OVERRIDE_TOOL_VERSION'] = version
+                    curl.rename(commands / 'curl.disabled')
+                    result = subprocess.run([repo / 'install' / f'install-{tool}.sh'], env=env, capture_output=True, text=True)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertTrue((root / 'bin' / tool).is_file())
+                    (commands / 'curl.disabled').rename(curl)
+                    del env['TOOLSHED_OVERRIDE_TOOL_VERSION']
+                    (root / checksum_name).write_text('0' * 64 + ('' if tool == 'kubectl' else '  ' + asset) + '\n')
+                    before = (repo / 'metadata' / f'{tool}.sh').read_bytes()
+                    result = subprocess.run([repo / 'discover' / f'discover-{tool}.sh'], env=env, capture_output=True, text=True)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertEqual((repo / 'metadata' / f'{tool}.sh').read_bytes(), before)
+                    self.assertEqual((repo / 'pins' / tool).read_text(), pin)
+
     def test_vegeta_update_records_all_platforms(self):
         with tempfile.TemporaryDirectory(prefix='vegeta update ') as temp:
             root = Path(temp)

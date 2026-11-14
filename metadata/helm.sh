@@ -1,0 +1,4 @@
+declare -A checksums=(
+    [archive/3.19.0/linux-x64]=a7f81ce08007091b86d8bd696eb4d86b8d0f2e1b9f6c714be62f82f96a594496
+    [binary/3.19.0/linux-x64]=e4722a77de9df824214aaf19d43687c49f7cbcf3b107905acea002173777d486
+)

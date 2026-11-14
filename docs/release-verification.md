@@ -117,3 +117,15 @@ Its extracted files were compared with the previously verified GitHub release
 archive. A temporary-directory upgrade and repeat installation succeeded on
 Linux x86_64, preserving an existing Node directory and backing up legacy Git
 metadata.
+
+Kubernetes tools were downloaded and tested on Linux x86_64 with glibc:
+
+| Tool | Versioned download | Download SHA-256 | Executable SHA-256 |
+| --- | --- | --- | --- |
+| kubectl 1.34.1 | [kubectl](https://dl.k8s.io/release/v1.34.1/bin/linux/amd64/kubectl) | `7721f265e18709862655affba5343e85e1980639395d5754473dafaadcaa69e3` | `7721f265e18709862655affba5343e85e1980639395d5754473dafaadcaa69e3` |
+| Helm 3.19.0 | [Linux archive](https://get.helm.sh/helm-v3.19.0-linux-amd64.tar.gz) | `a7f81ce08007091b86d8bd696eb4d86b8d0f2e1b9f6c714be62f82f96a594496` | `e4722a77de9df824214aaf19d43687c49f7cbcf3b107905acea002173777d486` |
+
+Both download digests matched the publishers' versioned SHA-256 files. The
+installers succeeded in temporary paths containing spaces, including repeated
+installation and installation with the cache removed; both commands reported
+their pinned versions. kubectl also reported bundled Kustomize 5.7.1.
