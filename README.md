@@ -26,7 +26,7 @@ Install a tool with its `install/install-<tool>.sh` script; for example:
 TOOLSHED_OVERRIDE_TOOL_VERSION=3.9.16 ./install/install-maven39.sh
 ```
 
-Java, Maven, Maven Daemon, Bun, Codex, Node, NVM, kubectl and Helm currently support Linux
+Java, Maven, Maven Daemon, Bun, Codex, Node, NVM, Go, kubectl, Helm, kind, clusterctl, and the controller and release tools currently support Linux
 x86_64 with glibc. Claude also supports Linux arm64 with glibc; Vegeta supports
 Linux and macOS on x86_64 and arm64. Installers reject unsupported platforms.
 Set `TOOLSHED_OVERRIDE_TOOL_VERSION` for a single installer invocation to select
@@ -34,7 +34,14 @@ a recorded version without changing the default pin; availability depends on
 the platform. Claude accepts versions verified by its signed manifest.
 
 kubectl provides the Kubernetes CLI (including Kustomize); Helm manages Kubernetes packages.
-Choose a kubectl version compatible with your cluster.
+kind runs local Kubernetes clusters using containers; clusterctl manages Cluster API providers.
+Choose a kubectl version compatible with your cluster. The standalone `kustomize`
+can be installed separately. Go installs both `go` and `gofmt` and defaults to `GOTOOLCHAIN=local` to avoid automatic toolchain downloads. The `gh`
+command is available from its upstream APT repository.
+
+Toolshed also provides cloud-provider-kind, kubebuilder, controller-gen,
+setup-envtest, golangci-lint, cosign, crane, trivy, and Mike Farah’s yq.
+setup-envtest downloads Kubernetes test assets separately when requested.
 
 ## Activation
 

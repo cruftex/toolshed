@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Report and update tools installed in Toolshed's configured locations."""
 import os
+import hashlib
 from pathlib import Path
 import re
 import subprocess
@@ -28,7 +29,8 @@ def executable_version(path, args=('--version',)):
         return None
     try:
         result = subprocess.run([str(path), *args], stdout=subprocess.PIPE,
-                                stderr=subprocess.STDOUT, text=True, timeout=15)
+                                stderr=subprocess.STDOUT, text=True, timeout=15,
+                                env=dict(os.environ, CLUSTERCTL_DISABLE_VERSIONCHECK='true', GOTOOLCHAIN='local'))
         return (parse_version(result.stdout) or '?') if result.returncode == 0 else '?'
     except (OSError, subprocess.TimeoutExpired):
         return '?'
@@ -37,11 +39,27 @@ def executable_version(path, args=('--version',)):
 def installed_tools():
     result = {}
     for name, filename in [('bun', 'bun'), ('claude', 'claude'), ('codex', 'codex'),
-                           ('vegeta', 'vegeta'), ('helm', 'helm'), ('kubectl', 'kubectl'), ('java25', 'java'),
+                           ('vegeta', 'vegeta'), ('go', 'go'), ('cloud-provider-kind', 'cloud-provider-kind'), ('kubebuilder', 'kubebuilder'), ('controller-gen', 'controller-gen'), ('golangci-lint', 'golangci-lint'), ('kustomize', 'kustomize'), ('crane', 'crane'), ('cosign', 'cosign'), ('trivy', 'trivy'), ('yq', 'yq'), ('helm', 'helm'), ('kubectl', 'kubectl'), ('kind', 'kind'), ('clusterctl', 'clusterctl'), ('java25', 'java'),
                            ('maven39', 'mvn39'), ('maven310', 'mvn310')]:
-        version = executable_version(bin_dir / filename, ('version', '--client') if name == 'kubectl' else (('version', '--short') if name == 'helm' else ('--version',)))
+        version = executable_version(bin_dir / filename, ('version', '--client') if name == 'kubectl' else (('version', '--short') if name == 'helm' else (('version',) if name in ('go', 'kind', 'cloud-provider-kind', 'kubebuilder', 'golangci-lint', 'kustomize', 'crane', 'cosign', 'trivy') else (('version', '-o', 'short') if name == 'clusterctl' else ('--version',)))))
         if version is not None:
             result[name] = version
+    # setup-envtest has no version flag; identify its verified bytes by recorded digest.
+    envtest = bin_dir / 'setup-envtest'
+    if envtest.is_file() and os.access(envtest, os.X_OK):
+        try:
+            with envtest.open('rb') as stream:
+                digest = hashlib.file_digest(stream, 'sha256').hexdigest()
+            script = """source "$1"; for key in "${!checksums[@]}"; do
+                [[ $key == binary/*/linux-x64 ]] && printf '%s %s\n' "$key" "${checksums[$key]}"
+            done; true"""
+            output = subprocess.run(['bash', '-c', script, '_', str(root / 'metadata/setup-envtest.sh')],
+                                    capture_output=True, text=True, check=True).stdout
+            matches = [line.split()[0].split('/')[1] for line in output.splitlines()
+                       if len(line.split()) == 2 and line.split()[1] == digest]
+            result['setup-envtest'] = max(matches, key=version_tuple) if matches else '?'
+        except (OSError, subprocess.CalledProcessError):
+            result['setup-envtest'] = '?'
     mvnd = bin_dir / 'mvnd'
     if mvnd.is_file() and os.access(mvnd, os.X_OK):
         # Avoid starting a daemon merely to display status.
@@ -113,7 +131,7 @@ for key in "${!archive_sha256[@]}"; do printf 'archive/%s\\n' "$key"; done'''
                 continue
             if name == 'maven310' and not version.startswith('3.10.'):
                 continue
-            if name in ('bun', 'vegeta', 'codex', 'helm', 'kubectl') and f'binary/{version}/{platform}' not in entries:
+            if name in ('bun', 'vegeta', 'codex', 'helm', 'kubectl', 'kind', 'clusterctl', 'cloud-provider-kind', 'kubebuilder', 'controller-gen', 'setup-envtest', 'golangci-lint', 'kustomize', 'crane', 'cosign', 'trivy', 'yq') and f'binary/{version}/{platform}' not in entries:
                 continue
             if host_entries is not None and not {f'archive/{version}/{platform}', f'binary/{version}/{platform}'} <= host_entries:
                 continue

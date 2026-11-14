@@ -351,3 +351,50 @@ install_pinned_maven() {
     url="https://archive.apache.org/dist/maven/maven-3/$version/binaries/apache-maven-$version-bin.tar.gz"
     install_maven_package maven "$version" "$url" "$checksum" "apache-maven-$version" mvn "Apache Maven $version"
 }
+
+# Install a pinned release executable, extracting only its requested archive member.
+install_release_binary() {
+    local name=$1 version=$2 url=$3 member=$4 archive_digest=$5 binary_digest=$6
+    local archive staging binary output
+    if binary_is_installed "$name" "$binary_digest"; then
+        return
+    fi
+    archive=$(cache_path "$url")
+    download_verified "$url" "$archive_digest" "$archive"
+    if [[ $member ]]; then
+        _installer_require tar chmod
+        stage_directory staging
+        tar -xOzf "$archive" "$member" > "$staging/binary" || _installer_fail "Cannot extract $name."
+        [[ -s $staging/binary ]] || _installer_fail "Empty $name executable."
+        chmod 755 "$staging/binary"
+        binary=$staging/binary
+    else
+        stage_executable "$archive" binary
+    fi
+    verify_sha256 "$binary" "$binary_digest"
+    validate_release_binary "$name" "$version" "$binary"
+    install_binary "$binary" "$name"
+}
+
+validate_release_binary() {
+    local name=$1 version=$2 binary=$3 output staging
+    case $name in
+        cloud-provider-kind|kubebuilder|golangci-lint|crane|trivy|kustomize|cosign) output=$("$binary" version 2>&1) ;;
+        controller-gen|yq) output=$("$binary" --version 2>&1) ;;
+        setup-envtest)
+            stage_directory staging
+            "$binary" list -i --bin-dir "$staging" >/dev/null || _installer_fail 'Cannot run setup-envtest.'
+            output=$version ;;
+        *) _installer_fail "Unsupported release executable: $name" ;;
+    esac || _installer_fail "Cannot run $name."
+    [[ $output == *"$version"* ]] || _installer_fail "Unexpected $name version: $output"
+}
+
+verify_go_toolchain() {
+    local directory=$1 version=$2 output
+    [[ -x $directory/bin/go && -x $directory/bin/gofmt ]] || _installer_fail "Incomplete Go installation: $directory"
+    output=$(GOTOOLCHAIN=local GOROOT="$directory" "$directory/bin/go" version) || _installer_fail 'Cannot run Go.'
+    [[ $output == "go version go$version "* ]] || _installer_fail "Unexpected Go version: $output"
+    output=$(printf 'package p\n' | "$directory/bin/gofmt") || _installer_fail 'Cannot run gofmt.'
+    [[ $output == 'package p' ]] || _installer_fail 'Unexpected gofmt output.'
+}

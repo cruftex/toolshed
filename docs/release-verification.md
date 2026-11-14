@@ -129,3 +129,38 @@ Both download digests matched the publishers' versioned SHA-256 files. The
 installers succeeded in temporary paths containing spaces, including repeated
 installation and installation with the cache removed; both commands reported
 their pinned versions. kubectl also reported bundled Kustomize 5.7.1.
+
+kind 0.30.0 and clusterctl 1.11.1 were downloaded for Linux x86_64 with glibc.
+The executable SHA-256 values, which also serve as download digests, are:
+
+- [kind 0.30.0](https://github.com/kubernetes-sigs/kind/releases/download/v0.30.0/kind-linux-amd64): `517ab7fc89ddeed5fa65abf71530d90648d9638ef0c4cde22c2c11f8097b8889` (matched the publisher checksum).
+- [clusterctl 1.11.1](https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.11.1/clusterctl-linux-amd64): `94ddb3bf1a3fbf296ffcda19a55173be7d37baed495c27006578e868033ea10d` (matched the GitHub release asset digest).
+
+Both executables reported their pinned versions; their installers were smoke-tested
+from the verified cache and repeated in temporary paths containing spaces.
+
+The following Linux x86_64 release assets were downloaded, hashed locally and
+matched against the publishers’ GitHub release asset digests. Installers were
+smoke-tested in temporary paths containing spaces, then repeated without a cache.
+For setup-envtest the smoke test used `list -i` because it has no version command.
+
+| Tool | Versioned asset | Download SHA-256 | Executable SHA-256 |
+| --- | --- | --- | --- |
+| cloud-provider-kind 0.12.0 | [download](https://github.com/kubernetes-sigs/cloud-provider-kind/releases/download/v0.12.0/cloud-provider-kind_0.12.0_linux_amd64.tar.gz) | `5716aca8f01a85172c12f3b6329c70f151bec02c91b6f600c9f230845ee138e6` | `e29a3a9970e5da68aeb630ec365ac0da69094d5b6c5dca4409bc5783cf4d6482` |
+| kubebuilder 4.16.0 | [download](https://github.com/kubernetes-sigs/kubebuilder/releases/download/v4.16.0/kubebuilder_linux_amd64) | `539984e58832044f2326b1bb940c1eaf784f1849e65d06d3a4a4a8b5dfac7ca7` | `539984e58832044f2326b1bb940c1eaf784f1849e65d06d3a4a4a8b5dfac7ca7` |
+| controller-gen 0.23.0 | [download](https://github.com/kubernetes-sigs/controller-tools/releases/download/v0.23.0/controller-gen-linux-amd64) | `849fc06f331c18ea4dcffd3f9c7e0d8d4a51013b57bbe60bc726fc125f9784a3` | `849fc06f331c18ea4dcffd3f9c7e0d8d4a51013b57bbe60bc726fc125f9784a3` |
+| setup-envtest 0.25.2 | [download](https://github.com/kubernetes-sigs/controller-runtime/releases/download/v0.25.2/setup-envtest-linux-amd64) | `94534f83896f3b09934d9570b213fbda04aa5c17457942270928cdca0317bf9b` | `94534f83896f3b09934d9570b213fbda04aa5c17457942270928cdca0317bf9b` |
+| golangci-lint 2.15.0 | [download](https://github.com/golangci/golangci-lint/releases/download/v2.15.0/golangci-lint-2.15.0-linux-amd64.tar.gz) | `9b7fe6a6bf6334b98decf8d86b11415ea7889afdabdd1959fdce23af2a9ebcea` | `d9af4564c05beb2f5e130119aec45e5e89d28e5017d558d3ca382659f2427894` |
+| cosign 3.1.4 | [download](https://github.com/sigstore/cosign/releases/download/v3.1.4/cosign-linux-amd64) | `424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa` | `424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa` |
+| crane 0.22.1 | [download](https://github.com/google/go-containerregistry/releases/download/v0.22.1/go-containerregistry_Linux_x86_64.tar.gz) | `0ab7a1d6932a213aed964ce97666c3077fe691c8606413674a8b3e0b9ec4cda0` | `8e75c326adb43b053cfd78b9b987663f8f4fe4557f4d3915905643f25c730992` |
+| trivy 0.76.2 | [download](https://github.com/aquasecurity/trivy/releases/download/v0.76.2/trivy_0.76.2_Linux-64bit.tar.gz) | `bc0fc726e017b8927a62b2d3531d7a84ee01769daf5c99ed866dced54089fdbf` | `6a972c69606c7b3ea4c6bdcc6fc9332ea9ad38381624310c1e85cc77345909f3` |
+| yq 4.54.3 | [download](https://github.com/mikefarah/yq/releases/download/v4.54.3/yq_linux_amd64) | `129534601871538efe0ba4c5e62a34fb1d5f469bcb975c4fddeb467d82974973` | `129534601871538efe0ba4c5e62a34fb1d5f469bcb975c4fddeb467d82974973` |
+| kustomize 5.8.3 | [download](https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v5.8.3/kustomize_v5.8.3_linux_amd64.tar.gz) | `cb9e31198d3f63b44848bd0afc4c8efc56e6cfef9c93a4a39a211940e6decd61` | `a5e53d28755098b003ae2b6bff7b1650a411a366a0c800c1ea1b677e0cfff747` |
+
+Go 1.27.4 was downloaded from the [Linux x86_64 archive](https://go.dev/dl/go1.27.4.linux-amd64.tar.gz).
+Its locally calculated SHA-256, `7226736c2339719cda28fbf3a54d71aa63bcefe376e98cef00034268dab24840`,
+matched Go's published checksum. The installer and repeat installation succeeded
+in a temporary path containing spaces, including with the download cache removed.
+The installed `gofmt` formatted a Go program and `go run` built and ran it. The
+installed toolchain defaults to `GOTOOLCHAIN=local` to prevent automatic toolchain
+downloads; an explicit environment or user configuration can override that default.

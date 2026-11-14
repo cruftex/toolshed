@@ -107,6 +107,97 @@ if [[ $url == */latest ]]; then cp "$FIXTURE/release.json" "$out"; else cp "$FIX
                     self.assertEqual((repo / 'metadata' / f'{tool}.sh').read_bytes(), before)
                     self.assertEqual((repo / 'pins' / tool).read_text(), pin)
 
+    def test_kind_and_clusterctl_discovery(self):
+        with tempfile.TemporaryDirectory(prefix='cluster discovery ') as temp:
+            root = Path(temp)
+            repo = root / 'repo'
+            for directory in ('install', 'lib', 'metadata', 'pins', 'discover'):
+                shutil.copytree(ROOT / directory, repo / directory)
+            (repo / 'env').write_text('\n'.join(f'{key}={shlex.quote(str(root / value))}' for key, value in [('TOOLSHED_DOWNLOAD_DIR', 'cache'), ('TOOLSHED_BIN_DIR', 'bin'), ('TOOLSHED_OPT_DIR', 'opt')]) + '\n')
+            commands = root / 'commands'
+            commands.mkdir()
+            curl = commands / 'curl'
+            curl.write_text("""#!/bin/bash
+while (($#)); do
+ case $1 in https://*) url=$1 ;; --output) out=$2; shift ;; esac
+ shift
+done
+if [[ $url == */latest ]]; then cp "$FIXTURE/release.json" "$out"; else cp "$FIXTURE/${url##*/}" "$out"; fi
+""")
+            curl.chmod(0o755)
+            env = dict(os.environ, PATH=f'{commands}:{os.environ["PATH"]}', FIXTURE=str(root))
+            for tool, version in [('kind', '0.31.0'), ('clusterctl', '1.12.0')]:
+                with self.subTest(tool=tool):
+                    asset = f'{tool}-linux-amd64'
+                    output = f'kind v{version} go1.24 linux/amd64' if tool == 'kind' else f'v{version}'
+                    (root / asset).write_bytes(f"#!/bin/sh\nprintf '{output}\\n'\n".encode())
+                    digest = hashlib.sha256((root / asset).read_bytes()).hexdigest()
+                    release = {'tag_name': 'v' + version, 'draft': False, 'prerelease': False, 'assets': [{'name': asset, 'digest': 'sha256:' + digest}]}
+                    (root / 'release.json').write_text(json.dumps(release))
+                    pin = (repo / 'pins' / tool).read_text()
+                    for _ in range(2):
+                        result = subprocess.run([repo / 'discover' / f'discover-{tool}.sh'], env=env, capture_output=True, text=True)
+                        self.assertEqual(result.returncode, 0, result.stderr)
+                        self.assertEqual(result.stdout.strip(), version)
+                    self.assertEqual((repo / 'pins' / tool).read_text(), pin)
+                    self.assertEqual((repo / 'metadata' / f'{tool}.sh').read_text().count(f'archive/{version}/linux-x64'), 1)
+                    env['TOOLSHED_OVERRIDE_TOOL_VERSION'] = version
+                    curl.rename(commands / 'curl.disabled')
+                    result = subprocess.run([repo / 'install' / f'install-{tool}.sh'], env=env, capture_output=True, text=True)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    (commands / 'curl.disabled').rename(curl)
+                    del env['TOOLSHED_OVERRIDE_TOOL_VERSION']
+                    release['assets'][0]['digest'] = 'sha256:' + '0' * 64
+                    (root / 'release.json').write_text(json.dumps(release))
+                    before = (repo / 'metadata' / f'{tool}.sh').read_bytes()
+                    result = subprocess.run([repo / 'discover' / f'discover-{tool}.sh'], env=env, capture_output=True, text=True)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertEqual((repo / 'metadata' / f'{tool}.sh').read_bytes(), before)
+
+    def test_controller_release_discovery_verifies_and_installs(self):
+        with tempfile.TemporaryDirectory(prefix='controller discovery ') as temp:
+            root = Path(temp)
+            repo = root / 'repo'
+            for directory in ('install', 'lib', 'metadata', 'pins', 'discover'):
+                shutil.copytree(ROOT / directory, repo / directory)
+            (repo / 'env').write_text('\n'.join(f'{key}={shlex.quote(str(root / value))}' for key, value in [('TOOLSHED_DOWNLOAD_DIR', 'cache'), ('TOOLSHED_BIN_DIR', 'bin'), ('TOOLSHED_OPT_DIR', 'opt')]) + '\n')
+            commands = root / 'commands'
+            commands.mkdir()
+            curl = commands / 'curl'
+            curl.write_text("""#!/bin/bash
+while (($#)); do
+ case $1 in https://*) url=$1 ;; --output) out=$2; shift ;; esac
+ shift
+done
+if [[ $url == */latest ]]; then cp "$FIXTURE/release.json" "$out"; else cp "$FIXTURE/${url##*/}" "$out"; fi
+""")
+            curl.chmod(0o755)
+            env = dict(os.environ, PATH=f'{commands}:{os.environ["PATH"]}', FIXTURE=str(root))
+            version = '0.24.0'
+            asset = 'controller-gen-linux-amd64'
+            (root / asset).write_bytes(b"#!/bin/sh\nprintf 'Version: v0.24.0\\n'\n")
+            digest = hashlib.sha256((root / asset).read_bytes()).hexdigest()
+            release = {'tag_name': 'v' + version, 'draft': False, 'prerelease': False, 'assets': [{'name': asset, 'digest': 'sha256:' + digest}]}
+            (root / 'release.json').write_text(json.dumps(release))
+            pin = (repo / 'pins/controller-gen').read_text()
+            for _ in range(2):
+                result = subprocess.run([repo / 'discover/discover-controller-gen.sh'], env=env, capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual((repo / 'pins/controller-gen').read_text(), pin)
+            self.assertEqual((repo / 'metadata/controller-gen.sh').read_text().count('archive/0.24.0/linux-x64'), 1)
+            env['TOOLSHED_OVERRIDE_TOOL_VERSION'] = version
+            curl.rename(commands / 'curl.disabled')
+            result = subprocess.run([repo / 'install/install-controller-gen.sh'], env=env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            (commands / 'curl.disabled').rename(curl)
+            del env['TOOLSHED_OVERRIDE_TOOL_VERSION']
+            release['assets'][0]['digest'] = 'sha256:' + '0' * 64
+            (root / 'release.json').write_text(json.dumps(release))
+            before = (repo / 'metadata/controller-gen.sh').read_bytes()
+            result = subprocess.run([repo / 'discover/discover-controller-gen.sh'], env=env, capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual((repo / 'metadata/controller-gen.sh').read_bytes(), before)
+
     def test_vegeta_update_records_all_platforms(self):
         with tempfile.TemporaryDirectory(prefix='vegeta update ') as temp:
             root = Path(temp)

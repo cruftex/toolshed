@@ -89,3 +89,33 @@ PY
     fi
     printf '%s\n' "$version"
 }
+
+# Discover one GitHub release, verify and cache its asset, and record both digests.
+discover_release_binary() {
+    local name=$1 repo=$2 tag_prefix=$3 asset_pattern=$4 member_pattern=$5
+    local staging version asset member url archive checksum binary binary_sha
+    [[ $(platform_string) == linux-x64 ]] || _installer_fail "$name discovery supports Linux x86_64 only."
+    _installer_require python3 sha256sum
+    stage_directory staging
+    release_info "$repo" "$tag_prefix" "$staging/release"
+    version=$(cat "$staging/release")
+    asset=${asset_pattern//\{version\}/$version}
+    member=${member_pattern//\{version\}/$version}
+    checksum=$(release_asset_digest "$staging/release" "$asset")
+    url="https://github.com/$repo/releases/download/$tag_prefix$version/$asset"
+    archive=$(cache_path "$url")
+    download_verified "$url" "$checksum" "$archive"
+    if [[ $member ]]; then
+        _installer_require tar chmod
+        tar -xOzf "$archive" "$member" > "$staging/binary" || _installer_fail "Cannot extract $name."
+        [[ -s $staging/binary ]] || _installer_fail "Empty $name executable."
+        chmod 755 "$staging/binary"
+        binary=$staging/binary
+    else
+        stage_executable "$archive" binary
+    fi
+    binary_sha=$(sha256sum < "$binary"); binary_sha=${binary_sha%% *}
+    validate_release_binary "$name" "$version" "$binary"
+    record_checksums "$name" "$version/linux-x64" "$checksum" "$binary_sha"
+    printf '%s\n' "$version"
+}
