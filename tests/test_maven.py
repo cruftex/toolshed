@@ -18,7 +18,7 @@ class MavenTests(unittest.TestCase):
         self.addCleanup(tmp.cleanup)
         self.root = Path(tmp.name)
         self.repo = self.root / 'repository with spaces'
-        for name in ('install', 'lib', 'metadata', 'pins', 'update'):
+        for name in ('install', 'lib', 'metadata', 'pins', 'discover'):
             shutil.copytree(ROOT / name, self.repo / name)
         self.cache, self.bin, self.opt = (self.root / name for name in ('cache', 'bin', 'opt'))
         (self.repo / 'env').write_text('\n'.join(f'{k}={shlex.quote(str(v))}' for k, v in [('TOOLSHED_DOWNLOAD_DIR', self.cache), ('TOOLSHED_BIN_DIR', self.bin), ('TOOLSHED_OPT_DIR', self.opt)]) + '\n')
@@ -51,11 +51,15 @@ esac
         return subprocess.run([self.repo / path], cwd=self.root, env=self.env, capture_output=True, text=True)
 
     def test_updater_selects_latest_patch_and_installs(self):
-        result = self.run_script('update/update-maven39.sh')
+        result = self.run_script('discover/discover-maven39.sh')
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual((self.repo / 'pins/maven39').read_text(), '3.9.17\n')
+        self.assertEqual((self.repo / 'pins/maven39').read_text(), '3.9.16\n')
         self.assertEqual((self.repo / 'pins/maven310').read_text(), '3.10.0\n')
         self.assertIn(self.digest, (self.repo / 'metadata/maven.sh').read_text())
+        self.assertFalse(self.bin.exists())
+        self.env['TOOLSHED_OVERRIDE_TOOL_VERSION'] = '3.9.17'
+        result = self.run_script('install/install-maven39.sh')
+        self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual((self.bin / 'mvn').resolve(), self.opt / 'maven/3.9.17/bin/mvn')
         self.assertEqual((self.bin / 'mvn39').resolve(), self.opt / 'maven/3.9.17/bin/mvn')
         (self.bin / 'mvn').unlink()
@@ -83,7 +87,7 @@ esac
         self.bin.mkdir()
         (self.bin / 'mvn').write_text('existing')
         self.env['TEST_SHA512'] = '0' * 128
-        result = self.run_script('update/update-maven39.sh')
+        result = self.run_script('discover/discover-maven39.sh')
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual((self.repo / 'pins/maven39').read_text(), '3.9.16\n')
         self.assertEqual((self.bin / 'mvn').read_text(), 'existing')

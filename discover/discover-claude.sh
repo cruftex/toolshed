@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+unset TOOLSHED_OVERRIDE_TOOL_VERSION
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 source "$root/lib/install.sh"
 source "$root/lib/update.sh"
@@ -16,5 +17,9 @@ download_verified "$base_url/$version/$platform/claude" "$checksum" "$cache/$pla
 stage_executable "$cache/$platform/claude" binary
 verify_sha256 "$binary" "$checksum"
 verify_version "$binary" "$version (Claude Code)"
-write_version_pin claude "$version"
-"$root/install/install-claude.sh"
+registry="$root/metadata/claude-versions"
+touch "$registry"
+if ! grep -Fxq -- "$version" "$registry"; then
+    printf '%s\n' "$version" >> "$registry"
+fi
+printf '%s\n' "$version"

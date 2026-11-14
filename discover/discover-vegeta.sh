@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+unset TOOLSHED_OVERRIDE_TOOL_VERSION
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 source "$root/lib/install.sh"
 source "$root/lib/update.sh"
@@ -24,5 +25,4 @@ done < "$staging/checksums"
 while read -r platform archive_sha binary_sha; do
     record_checksums vegeta "$version/$platform" "$archive_sha" "$binary_sha"
 done < "$staging/checksums"
-write_version_pin vegeta "$version"
-"$root/install/install-vegeta.sh"
+printf "%s\n" "$version"

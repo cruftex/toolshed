@@ -3,7 +3,7 @@
 set -euo pipefail
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/lib/install.sh"
 
-version=$(read_version_pin bun)
+version=$(select_install_version bun "$@")
 platform=$(platform_string)
 key="$version/$platform"
 load_binary_checksums bun "$key"

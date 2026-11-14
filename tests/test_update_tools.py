@@ -18,7 +18,7 @@ class UpdateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix='bun update ') as temp:
             root = Path(temp)
             repo = root / 'repo with spaces'
-            for directory in ('install', 'lib', 'metadata', 'pins', 'update'):
+            for directory in ('install', 'lib', 'metadata', 'pins', 'discover'):
                 shutil.copytree(ROOT / directory, repo / directory)
             (repo / 'env').write_text('\n'.join(f'{key}={shlex.quote(str(root / value))}' for key, value in [('TOOLSHED_DOWNLOAD_DIR','cache'), ('TOOLSHED_BIN_DIR','bin'), ('TOOLSHED_OPT_DIR','opt')]) + '\n')
             binary = b"#!/bin/sh\nprintf '1.5.0\\n'\n"
@@ -39,12 +39,13 @@ if [[ $url == */latest ]]; then cp "$FIXTURE/release.json" "$out"; else cp "$FIX
 ''')
             curl.chmod(0o755)
             env = dict(os.environ, PATH=f'{commands}:{os.environ["PATH"]}', FIXTURE=str(root))
+            old_pin = (repo / 'pins/bun').read_text()
             for _ in range(2):
-                result = subprocess.run([repo / 'update/update-bun.sh'], cwd=root, env=env, capture_output=True, text=True)
+                result = subprocess.run([repo / 'discover/discover-bun.sh'], cwd=root, env=env, capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual((repo / 'pins/bun').read_text(), '1.5.0\n')
-            self.assertEqual((root / 'bin/bun').read_bytes(), binary)
-            self.assertEqual((root / 'bin/bunx').readlink(), Path('bun'))
+            self.assertEqual((repo / 'pins/bun').read_text(), old_pin)
+            self.assertFalse((root / 'bin/bun').exists())
+            self.assertEqual(result.stdout.strip(), '1.5.0')
             metadata = (repo / 'metadata/bun.sh').read_text()
             self.assertEqual(metadata.count('archive/1.5.0/linux-x64'), 1)
             self.assertEqual(metadata.count('binary/1.5.0/linux-x64'), 1)
@@ -53,7 +54,7 @@ if [[ $url == */latest ]]; then cp "$FIXTURE/release.json" "$out"; else cp "$FIX
         with tempfile.TemporaryDirectory(prefix='vegeta update ') as temp:
             root = Path(temp)
             repo = root / 'repo'
-            for directory in ('install', 'lib', 'metadata', 'pins', 'update'):
+            for directory in ('install', 'lib', 'metadata', 'pins', 'discover'):
                 shutil.copytree(ROOT / directory, repo / directory)
             (repo / 'env').write_text('\n'.join(f'{key}={shlex.quote(str(root / value))}' for key, value in [('TOOLSHED_DOWNLOAD_DIR','cache'), ('TOOLSHED_BIN_DIR','bin'), ('TOOLSHED_OPT_DIR','opt')]) + '\n')
             binary = b"#!/bin/sh\nprintf 'Version: v12.14.0\\n'\n"
@@ -78,10 +79,11 @@ if [[ $url == */latest ]]; then cp "$FIXTURE/release.json" "$out"; else cp "$FIX
 ''')
             curl.chmod(0o755)
             env = dict(os.environ, PATH=f'{commands}:{os.environ["PATH"]}', FIXTURE=str(root))
-            result = subprocess.run([repo / 'update/update-vegeta.sh'], cwd=root, env=env, capture_output=True, text=True)
+            old_pin = (repo / 'pins/vegeta').read_text()
+            result = subprocess.run([repo / 'discover/discover-vegeta.sh'], cwd=root, env=env, capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual((repo / 'pins/vegeta').read_text(), '12.14.0\n')
-            self.assertEqual((root / 'bin/vegeta').read_bytes(), binary)
+            self.assertEqual((repo / 'pins/vegeta').read_text(), old_pin)
+            self.assertFalse((root / 'bin/vegeta').exists())
             for platform in ('linux_amd64', 'linux_arm64', 'darwin_amd64', 'darwin_arm64'):
                 self.assertIn(f'archive/12.14.0/{platform}', (repo / 'metadata/vegeta.sh').read_text())
             metadata = repo / 'metadata/vegeta.sh'
@@ -92,10 +94,10 @@ if [[ $url == */latest ]]; then cp "$FIXTURE/release.json" "$out"; else cp "$FIX
             metadata.write_text(''.join(lines))
             before = metadata.read_bytes()
             pin = (repo / 'pins/vegeta').read_bytes()
-            installed = (root / 'bin/vegeta').read_bytes()
-            result = subprocess.run([repo / 'update/update-vegeta.sh'], cwd=root, env=env, capture_output=True, text=True)
+            self.assertFalse((root / 'bin/vegeta').exists())
+            result = subprocess.run([repo / 'discover/discover-vegeta.sh'], cwd=root, env=env, capture_output=True, text=True)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn('Conflicting archive metadata', result.stderr)
             self.assertEqual(metadata.read_bytes(), before)
             self.assertEqual((repo / 'pins/vegeta').read_bytes(), pin)
-            self.assertEqual((root / 'bin/vegeta').read_bytes(), installed)
+            self.assertFalse((root / 'bin/vegeta').exists())

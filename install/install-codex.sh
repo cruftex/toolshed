@@ -3,7 +3,7 @@ set -euo pipefail
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/lib/install.sh"
 
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-version=$(read_version_pin codex)
+version=$(select_install_version codex "$@")
 platform=$(platform_string)
 key="$version/$platform"
 stage_codex_component() {

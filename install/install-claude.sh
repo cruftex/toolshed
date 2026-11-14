@@ -6,7 +6,7 @@ base_url=https://downloads.claude.ai/claude-code-releases
 platform=$(platform_string)
 platform=${platform/aarch64/arm64}
 case $platform in linux-x64|linux-arm64) ;; *) _installer_fail "Unsupported Claude platform: $platform" ;; esac
-version=$(read_version_pin claude)
+version=$(select_install_version claude "$@")
 cache=$(cache_path "$base_url/$version")
 download_signed_manifest "$base_url/$version/manifest.json" https://downloads.claude.ai/keys/claude-code.asc \
     31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE "$cache/manifest"

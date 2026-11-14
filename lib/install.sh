@@ -63,6 +63,19 @@ read_version_pin() {
     printf '%s\n' "$value"
 }
 
+# An explicit environment selection does not change the repository pin.
+select_install_version() {
+    local tool=$1
+    shift
+    (( $# == 0 )) || _installer_fail 'Unexpected installer arguments.'
+    if [[ ${TOOLSHED_OVERRIDE_TOOL_VERSION+x} ]]; then
+        [[ $TOOLSHED_OVERRIDE_TOOL_VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || _installer_fail 'Invalid TOOLSHED_OVERRIDE_TOOL_VERSION.'
+        printf '%s\n' "$TOOLSHED_OVERRIDE_TOOL_VERSION"
+    else
+        read_version_pin "$tool"
+    fi
+}
+
 load_binary_checksums() {
     local tool=$1 key=$2
     local -A checksums=()

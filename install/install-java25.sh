@@ -2,7 +2,7 @@
 set -euo pipefail
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/lib/install.sh"
 
-version=$(read_version_pin java25)
+version=$(select_install_version java25 "$@")
 platform=$(platform_string)
 source "$_installer_library_dir/../metadata/java25.sh"
 checksum=${checksums[archive/$version/$platform]:-}

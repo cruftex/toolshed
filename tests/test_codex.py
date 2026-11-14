@@ -74,7 +74,7 @@ cp "$FIXTURES/${url##*/}" "$out"
         with tempfile.TemporaryDirectory(prefix="codex update ") as tmp:
             root = Path(tmp)
             repo = root / "repo"
-            for directory in ("install", "lib", "metadata", "pins", "update"):
+            for directory in ("install", "lib", "metadata", "pins", "discover"):
                 shutil.copytree(ROOT / directory, repo / directory)
             cache, dest = root / "cache", root / "bin"
             (repo / "env").write_text(f"TOOLSHED_DOWNLOAD_DIR={shlex.quote(str(cache))}\nTOOLSHED_BIN_DIR={shlex.quote(str(dest))}\nTOOLSHED_OPT_DIR={shlex.quote(str(root / 'opt'))}\n")
@@ -103,11 +103,12 @@ if [[ $url == */latest ]]; then cp "$FIXTURES/release.json" "$out"; else cp "$FI
 """)
             curl.chmod(0o755)
             env = dict(os.environ, PATH=f'{commands}:{os.environ["PATH"]}', FIXTURES=str(root))
-            result = subprocess.run([repo / "update/update-codex.sh"], cwd=root, env=env, capture_output=True, text=True)
+            old_pin = (repo / "pins/codex").read_text()
+            result = subprocess.run([repo / "discover/discover-codex.sh"], cwd=root, env=env, capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual((repo / "pins/codex").read_text(), "0.170.0\n")
+            self.assertEqual((repo / "pins/codex").read_text(), old_pin)
             for name in binaries:
-                self.assertEqual((dest / name).read_bytes(), binaries[name])
+                self.assertFalse((dest / name).exists())
                 self.assertIn("0.170.0/linux-x64", (repo / "metadata" / (name + ".sh")).read_text())
-            again = subprocess.run([repo / "update/update-codex.sh"], cwd=root, env=env, capture_output=True, text=True)
+            again = subprocess.run([repo / "discover/discover-codex.sh"], cwd=root, env=env, capture_output=True, text=True)
             self.assertEqual(again.returncode, 0, again.stderr)

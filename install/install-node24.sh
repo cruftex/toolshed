@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/lib/install.sh"
-version=$(read_version_pin node24)
+version=$(select_install_version node24 "$@")
 platform=$(platform_string)
 declare -A archive_sha256=([24.22.3/linux-x64]=061ec3e3062115705b56b51fa9cc330ab50d34b6969387d4e4b1a50c6809acc2)
 checksum=${archive_sha256[$version/$platform]:-}
 [[ $checksum ]] || _installer_fail "No pinned Node archive for $version/$platform."
-"$_installer_library_dir/../install/install-nvm.sh"
+env -u TOOLSHED_OVERRIDE_TOOL_VERSION "$_installer_library_dir/../install/install-nvm.sh"
 destination="$TOOLSHED_NVM_DIR/versions/node/v$version"
 if [[ ! -e $destination && ! -L $destination ]]; then
     url="https://nodejs.org/dist/v$version/node-v$version-linux-x64.tar.gz"

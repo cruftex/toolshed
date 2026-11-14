@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+unset TOOLSHED_OVERRIDE_TOOL_VERSION
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 source "$root/lib/install.sh"
 source "$root/lib/update.sh"
@@ -31,5 +32,4 @@ key="archive/$version/linux-x64"
 if [[ ! ${checksums[$key]+present} ]]; then
     printf '\nchecksums[%s]=%s\n' "$key" "$checksum" >> "$root/metadata/java25.sh"
 fi
-write_version_pin java25 "$version"
-"$root/install/install-java25.sh"
+printf "%s\n" "$version"

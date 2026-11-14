@@ -1,0 +1,159 @@
+from pathlib import Path
+import hashlib
+import os
+import shlex
+import shutil
+import subprocess
+import tempfile
+import unittest
+import zipfile
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+class ToolshedCommandTests(unittest.TestCase):
+    def test_update_installs_cached_release_without_network(self):
+        with tempfile.TemporaryDirectory(prefix='shed offline ') as tmp:
+            root = Path(tmp)
+            repo = root / 'checkout with spaces'
+            for directory in ('bin', 'install', 'lib', 'metadata', 'pins'):
+                shutil.copytree(ROOT / directory, repo / directory)
+            shutil.copy(ROOT / 'list-tools.sh', repo / 'list-tools.sh')
+            bindir, cache = root / 'local bin', root / 'cache'
+            bindir.mkdir()
+            commands = root / 'commands'
+            commands.mkdir()
+            curl = commands / 'curl'
+            curl.write_text(f'#!/bin/sh\ntouch {shlex.quote(str(root / "network-called"))}\nexit 1\n')
+            curl.chmod(0o755)
+            (repo / 'env').write_text('\n'.join(
+                f'{key}={shlex.quote(str(value))}' for key, value in (
+                    ('TOOLSHED_BIN_DIR', bindir), ('TOOLSHED_OPT_DIR', root / 'opt'),
+                    ('TOOLSHED_DOWNLOAD_DIR', cache), ('TOOLSHED_NVM_DIR', root / 'nvm'))) + '\n')
+            old = bindir / 'bun'
+            old.write_text('#!/bin/sh\necho 1.0.0\n')
+            old.chmod(0o755)
+            binary = b'#!/bin/sh\necho 9.9.9\n'
+            archive = cache / 'github.com/oven-sh/bun/releases/download/bun-v9.9.9/bun-linux-x64.zip'
+            archive.parent.mkdir(parents=True)
+            with zipfile.ZipFile(archive, 'w') as z:
+                z.writestr('bun-linux-x64/bun', binary)
+            with (repo / 'metadata/bun.sh').open('a') as metadata:
+                metadata.write(f'\nchecksums[archive/9.9.9/linux-x64]={hashlib.sha256(archive.read_bytes()).hexdigest()}\n')
+                metadata.write(f'checksums[binary/9.9.9/linux-x64]={hashlib.sha256(binary).hexdigest()}\n')
+            env = dict(os.environ, PATH=f'{commands}:{os.environ["PATH"]}')
+            result = subprocess.run([repo / 'bin/shed', 'update'], cwd=root, env=env,
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(old.read_bytes(), binary)
+            self.assertEqual((repo / 'pins/bun').read_text(), '9.9.9\n')
+            self.assertFalse((root / 'network-called').exists())
+
+    def test_list_from_another_directory(self):
+        with tempfile.TemporaryDirectory(prefix='toolshed cli ') as cwd:
+            result = subprocess.run(['shed', 'available'], cwd=cwd,
+                                    env=dict(os.environ, PATH=f'{ROOT / "bin"}:{os.environ["PATH"]}'),
+                                    capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('bun', result.stdout)
+        self.assertIn((ROOT / 'pins/bun').read_text().strip(), result.stdout)
+
+    def test_unknown_command_fails(self):
+        result = subprocess.run([ROOT / 'bin/shed', 'missing'], capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Usage:', result.stderr)
+
+    def test_installed_and_updates_only_target_installed_tools(self):
+        with tempfile.TemporaryDirectory(prefix='shed status ') as tmp:
+            root = Path(tmp)
+            repo = root / 'checkout'
+            for directory in ('bin', 'lib', 'pins', 'metadata'):
+                shutil.copytree(ROOT / directory, repo / directory)
+            shutil.copy(ROOT / 'list-tools.sh', repo / 'list-tools.sh')
+            for directory in ('install', 'discover', 'local bin'):
+                (root / directory if directory == 'local bin' else repo / directory).mkdir()
+            (repo / 'env').write_text('\n'.join(
+                f'{key}={shlex.quote(str(root / value))}' for key, value in (
+                    ('TOOLSHED_BIN_DIR', 'local bin'), ('TOOLSHED_OPT_DIR', 'opt'),
+                    ('TOOLSHED_NVM_DIR', 'nvm'))) + '\n')
+            (repo / 'pins/bun').write_text('2.0.0\n')
+            with (repo / 'metadata/bun.sh').open('a') as metadata:
+                metadata.write('\nchecksums[archive/2.0.0/linux-x64]=test\nchecksums[binary/2.0.0/linux-x64]=test\n')
+                metadata.write('checksums[archive/3.0.0/linux-x64]=test\nchecksums[binary/3.0.0/linux-x64]=test\n')
+            bun = root / 'local bin/bun'
+            bun.write_text('#!/bin/sh\necho 1.0.0\n')
+            bun.chmod(0o755)
+            for directory in ('install', 'discover'):
+                script = repo / directory / f'{directory}-bun.sh'
+                script.write_text(f'#!/bin/sh\nprintf "%s" "${{TOOLSHED_OVERRIDE_TOOL_VERSION-unset}}" > "{root / directory}"\nprintf "3.0.0\\n"\n')
+                script.chmod(0o755)
+            shed = repo / 'bin/shed'
+            env = dict(os.environ, TOOLSHED_OVERRIDE_TOOL_VERSION='9.9.9')
+            result = subprocess.run([shed, 'installed'], cwd=root, env=env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('1.0.0', result.stdout)
+            self.assertIn('3.0.0', result.stdout)
+            self.assertIn('yes', result.stdout)
+            result = subprocess.run([shed, 'discover'], cwd=root, env=env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('3.0.0 available and cached', result.stdout)
+            self.assertEqual((repo / 'pins/bun').read_text(), '2.0.0\n')
+            self.assertIn('1.0.0', bun.read_text())
+            self.assertFalse((root / 'install').exists())
+            for command in ('update', 'discover'):
+                result = subprocess.run([shed, command], cwd=root, env=env, capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual((root / 'install').read_text(), '3.0.0')
+            self.assertEqual((root / 'discover').read_text(), 'unset')
+            self.assertEqual((repo / 'pins/bun').read_text(), '3.0.0\n')
+            self.assertIn('available and cached', result.stdout)
+            self.assertNotIn('running discover-', result.stdout)
+            (repo / 'pins/bun').write_text('2.0.0\n')
+            failing = repo / 'install/install-bun.sh'
+            failing.write_text('#!/bin/sh\necho "install failed" >&2\nexit 1\n')
+            failing.chmod(0o755)
+            result = subprocess.run([shed, 'update'], cwd=root, env=env, capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('install failed', result.stderr)
+            self.assertEqual((repo / 'pins/bun').read_text(), '2.0.0\n')
+            failing.write_text('#!/bin/sh\nexit 0\n')
+            failing.chmod(0o755)
+            nvm_dir = root / 'nvm'
+            nvm_dir.mkdir()
+            (nvm_dir / 'nvm.sh').write_text('nvm() { printf "0.1.0\\n"; }\n')
+            nvm_installer = repo / 'install/install-nvm.sh'
+            nvm_installer.write_text('#!/bin/sh\nexit 0\n')
+            nvm_installer.chmod(0o755)
+            result = subprocess.run([shed, 'update'], cwd=root, env=env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('nvm: installed', result.stdout)
+            result = subprocess.run([shed, 'discover'], cwd=root, env=env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('nvm: no internet updater available', result.stdout)
+
+    def test_installer_link_and_existing_command(self):
+        with tempfile.TemporaryDirectory(prefix='shed installer ') as tmp:
+            root = Path(tmp)
+            repo = root / 'checkout with spaces'
+            for directory in ('bin', 'install', 'lib', 'metadata', 'pins'):
+                shutil.copytree(ROOT / directory, repo / directory)
+            shutil.copy(ROOT / 'list-tools.sh', repo / 'list-tools.sh')
+            bindir = root / 'local bin'
+            (repo / 'env').write_text('\n'.join(
+                f'{key}={shlex.quote(str(root / value))}' for key, value in (
+                    ('TOOLSHED_BIN_DIR', 'local bin'), ('TOOLSHED_OPT_DIR', 'opt'),
+                    ('TOOLSHED_DOWNLOAD_DIR', 'cache'))) + '\n')
+            installer = repo / 'install/install-toolshed.sh'
+            for _ in range(2):
+                result = subprocess.run([installer], cwd=root, capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+            command = bindir / 'shed'
+            self.assertEqual(command.resolve(), repo / 'bin/shed')
+            result = subprocess.run([command, 'available'], cwd=root, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('bun', result.stdout)
+            command.unlink()
+            command.write_text('existing command')
+            result = subprocess.run([installer], cwd=root, capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(command.read_text(), 'existing command')

@@ -81,12 +81,11 @@ PY
     source "$_installer_library_dir/../metadata/maven.sh"
     key="$version/linux-x64"
     [[ ! ${archive_sha256[$key]+present} || ${archive_sha256[$key]} == "$digest" ]] || _installer_fail "Conflicting Maven checksum: $key"
-    if [[ ! ${archive_sha256[$key]+present} ]]; then
-        printf '\narchive_sha256[%s]=%s\n' "$key" "$digest" >> "$_installer_library_dir/../metadata/maven.sh"
-    fi
     local archive
     archive=$(cache_path "$url")
     download_verified "$url" "$digest" "$archive"
-    write_version_pin "$pin" "$version"
-    "$_installer_library_dir/../install/install-$pin.sh"
+    if [[ ! ${archive_sha256[$key]+present} ]]; then
+        printf '\narchive_sha256[%s]=%s\n' "$key" "$digest" >> "$_installer_library_dir/../metadata/maven.sh"
+    fi
+    printf '%s\n' "$version"
 }

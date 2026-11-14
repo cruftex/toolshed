@@ -3,7 +3,7 @@
 set -euo pipefail
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/lib/install.sh"
 
-version=$(read_version_pin vegeta)
+version=$(select_install_version vegeta "$@")
 
 _installer_require uname
 case $(uname -s) in

@@ -18,7 +18,7 @@ class JavaInstallerTests(unittest.TestCase):
         self.addCleanup(tmp.cleanup)
         self.root = Path(tmp.name)
         self.repo = self.root / 'repository with spaces'
-        for name in ('install', 'lib', 'metadata', 'pins', 'profile.d', 'update'):
+        for name in ('install', 'lib', 'metadata', 'pins', 'profile.d', 'discover'):
             shutil.copytree(ROOT / name, self.repo / name)
         self.cache, self.bin, self.opt = (self.root / name for name in ('cache', 'bin', 'opt'))
         (self.repo / 'env').write_text('\n'.join(f'{key}={shlex.quote(str(value))}' for key, value in [('TOOLSHED_DOWNLOAD_DIR', self.cache), ('TOOLSHED_BIN_DIR', self.bin), ('TOOLSHED_OPT_DIR', self.opt)]) + '\n')
@@ -74,10 +74,10 @@ esac
         self.assertFalse((self.opt / 'java25/25.0.5').exists())
 
     def test_update_uses_oracle_metadata(self):
-        result = self.run_script('update/update-java25.sh')
+        result = self.run_script('discover/discover-java25.sh')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual((self.repo / 'pins/java25').read_text(), '25.0.5\n')
-        self.assertTrue((self.bin / 'javac').is_symlink())
+        self.assertFalse((self.bin / 'javac').exists())
 
     def test_reject_unpinned_version(self):
         (self.repo / 'pins/java25').write_text('25.0.6\n')

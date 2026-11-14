@@ -6,3 +6,5 @@ TOOLSHED_OPT_DIR=~/opt
 
 TOOLSHED_NVM_DIR=~/.nvm
 TOOLSHED_CLAUDE_SETTINGS=~/.claude/settings.json
+
+TOOLSHED_NVM_GIT_DIR=~/.cache/toolshed/nvm-git

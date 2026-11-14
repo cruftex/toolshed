@@ -21,7 +21,7 @@ class InstallerTests(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
         self.repo = self.root / "repository with spaces"
-        for directory in ("install", "lib", "metadata", "pins", "update"):
+        for directory in ("install", "lib", "metadata", "pins", "discover"):
             shutil.copytree(ROOT / directory, self.repo / directory)
         self.downloads = self.root / "download cache"
         self.bin = self.root / "destination bin"
@@ -241,7 +241,7 @@ class InstallerTests(unittest.TestCase):
         archive_digest = hashlib.sha256(self.archive.read_bytes()).hexdigest()
         binary_digest = hashlib.sha256(binary).hexdigest()
         installer = self.repo / "install/install-bun.sh"
-        (self.repo / "pins/bun").write_text("9.9.9\n")
+        original_pin = (self.repo / "pins/bun").read_text()
         metadata = self.repo / "metadata/bun.sh"
         with metadata.open("a") as f:
             f.write(f"checksums[archive/9.9.9/linux-aarch64]={archive_digest}\n")
@@ -250,10 +250,11 @@ class InstallerTests(unittest.TestCase):
         uname.write_text('#!/bin/sh\ncase "$1" in -s) echo Linux;; -m) echo aarch64;; esac\n')
         uname.chmod(0o755)
         result = subprocess.run(
-            [installer], cwd=self.root, env=self.env,
+            [installer], cwd=self.root, env=dict(self.env, TOOLSHED_OVERRIDE_TOOL_VERSION='9.9.9'),
             capture_output=True, text=True, timeout=30,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.repo / "pins/bun").read_text(), original_pin)
         self.assertEqual((self.bin / "bun").read_bytes(), binary)
         self.assertEqual((self.downloads / "github.com/oven-sh/bun/releases/download/bun-v9.9.9/bun-linux-aarch64.zip").read_bytes(), self.archive.read_bytes())
         self.assertEqual(subprocess.check_output([self.bin / "bunx", "--version"], text=True), "9.9.9\n")
@@ -275,6 +276,25 @@ class InstallerTests(unittest.TestCase):
             binary.write("# modified, same version output\n")
         self.assertEqual(subprocess.check_output([installed], text=True), "1.2.3\n")
         self.assertNotEqual(self.run_helper(f"binary_is_installed tool {digest}").returncode, 0)
+
+    def test_version_selection_and_invalid_override(self):
+        default = (self.repo / "pins/bun").read_text().strip()
+        result = self.run_helper('select_install_version bun')
+        self.assertEqual(result.stdout.strip(), default)
+        result = self.run_helper('select_install_version bun', TOOLSHED_OVERRIDE_TOOL_VERSION='9.9.9')
+        self.assertEqual(result.stdout.strip(), '9.9.9')
+        self.assertEqual((self.repo / 'pins/bun').read_text().strip(), default)
+        for invalid in ('', '../1.2.3', 'latest'):
+            result = self.run_helper('select_install_version bun', TOOLSHED_OVERRIDE_TOOL_VERSION=invalid)
+            self.assertNotEqual(result.returncode, 0)
+
+    def test_override_without_recorded_checksum_rejected_before_download(self):
+        result = subprocess.run([self.repo / 'install/install-bun.sh'], cwd=self.root,
+                                env=dict(self.env, TOOLSHED_OVERRIDE_TOOL_VERSION='9.9.9'),
+                                capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('No pinned Bun checksums', result.stderr)
+        self.assertFalse(self.calls.exists())
 
     def test_binary_digest_failure_prevents_execution_and_replacement(self):
         self.bin.mkdir()
@@ -491,11 +511,24 @@ elif '--import' not in sys.argv:
                 manifest.write_bytes(original)
                 self.assert_no_temporary_files()
 
+    def test_claude_fresh_install_uses_complete_cache_offline(self):
+        self.prepare_claude_fixture()
+        first = self.run_claude()
+        self.assertEqual(first.returncode, 0, first.stderr)
+        installed = self.bin / 'claude'
+        original = installed.read_bytes()
+        installed.unlink()
+        self.calls.unlink()
+        offline = self.run_claude(DOWNLOAD_MODE='fail')
+        self.assertEqual(offline.returncode, 0, offline.stderr)
+        self.assertEqual(installed.read_bytes(), original)
+        self.assertFalse(self.calls.exists())
+
     def test_claude_latest_version_validation_and_upgrade(self):
         _, release, _ = self.prepare_claude_fixture()
         for version in ("../escape", "latest", "2.1.322/../../escape"):
             (release / "latest").write_text(version)
-            result = subprocess.run([self.repo / "update/update-claude.sh"], cwd=self.root, env=self.env, capture_output=True, text=True)
+            result = subprocess.run([self.repo / "discover/discover-claude.sh"], cwd=self.root, env=self.env, capture_output=True, text=True)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("Invalid latest release version", result.stderr)
             self.assertFalse(self.bin.exists())
@@ -508,10 +541,11 @@ elif '--import' not in sys.argv:
         self.write_mock_manifest(release, {"version": "2.1.323", "platforms": {
             "linux-x64": {"checksum": hashlib.sha256(binary).hexdigest()},
         }})
-        upgrade = subprocess.run([self.repo / "update/update-claude.sh"], cwd=self.root, env=self.env, capture_output=True, text=True)
+        upgrade = subprocess.run([self.repo / "discover/discover-claude.sh"], cwd=self.root, env=self.env, capture_output=True, text=True)
         self.assertEqual(upgrade.returncode, 0, upgrade.stderr)
-        self.assertEqual((self.bin / "claude").read_bytes(), binary)
-        self.assertEqual((self.repo / "pins/claude").read_text(), "2.1.323\n")
+        self.assertNotEqual((self.bin / "claude").read_bytes(), binary)
+        self.assertEqual((self.repo / "pins/claude").read_text(), "2.1.322\n")
+        self.assertIn("2.1.323", (self.repo / "metadata/claude-versions").read_text())
         self.assertTrue((self.downloads / "downloads.claude.ai/claude-code-releases/2.1.322/linux-x64/claude").exists())
         self.assertTrue((self.downloads / "downloads.claude.ai/claude-code-releases/2.1.323/linux-x64/claude").exists())
 
@@ -533,7 +567,7 @@ elif '--import' not in sys.argv:
         _, release, _ = self.prepare_claude_fixture()
         (release / "latest").write_text("2.1.323")
         (release / "manifest.json.sig").write_text("invalid")
-        result = subprocess.run([self.repo / "update/update-claude.sh"], cwd=self.root,
+        result = subprocess.run([self.repo / "discover/discover-claude.sh"], cwd=self.root,
                                 env=self.env, capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual((self.repo / "pins/claude").read_text(), "2.1.322\n")
@@ -588,7 +622,7 @@ elif '--import' not in sys.argv:
         with installed.open("ab") as binary:
             binary.write(b"\nmodified\n")
         self.assertEqual(subprocess.check_output([installed, "--version"], text=True), "1.4.4\n")
-        cache.parent.mkdir(parents=True)
+        cache.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(os.environ["BUN_TEST_ARCHIVE"], cache)
         result = subprocess.run(
             [self.repo / "install/install-bun.sh"], cwd=self.root,

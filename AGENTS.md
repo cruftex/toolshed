@@ -2,10 +2,16 @@
 
 Every installer must reproduce a specific tool version. Pin the version, use a version-specific download URL, and embed the
 expected SHA-256 in the installer.
-Do not discover `latest` at runtime, accept version overrides, run unpinned remote
-installation scripts, or upgrade tools automatically.
+Do not discover `latest` at installer runtime, run unpinned remote installation
+scripts, or upgrade tools automatically. Explicit `TOOLSHED_OVERRIDE_TOOL_VERSION` selections must
+use repository-recorded verification metadata, or Claude's signed manifest.
 
 ## Downloads and verification
+
+- Normal installs and updates must not contact external servers when all
+  required downloads and verification materials are cached. This supports
+  reliable CI, air-gapped installs, and reusable local tool repositories.
+  Discovery may contact publishers to find and cache new releases.
 
 - Claude Code uses a pinned version and is exempt from embedded SHA-256 pins:
   authenticate the versioned manifest with

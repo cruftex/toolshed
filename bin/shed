@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+script=${BASH_SOURCE[0]}
+while [[ -L $script ]]; do
+    directory=$(cd -- "$(dirname -- "$script")" && pwd)
+    script=$(readlink -- "$script")
+    [[ $script == /* ]] || script="$directory/$script"
+done
+root=$(cd -- "$(dirname -- "$script")/.." && pwd)
+case ${1:-} in
+    available)
+        [[ $# == 1 ]] || { printf 'Usage: shed available\n' >&2; exit 2; }
+        exec "$root/list-tools.sh"
+        ;;
+    installed|update|discover)
+        [[ $# == 1 ]] || { printf 'Usage: shed %s\n' "$1" >&2; exit 2; }
+        source "$root/env"
+        exec python3 "$root/lib/shed.py" "$1" "$TOOLSHED_BIN_DIR" "$TOOLSHED_OPT_DIR" "$TOOLSHED_NVM_DIR"
+        ;;
+    -h|--help|'') printf 'Usage: shed {available|installed|update|discover}\n' ;;
+    *) printf 'Unknown command: %s\nUsage: shed {available|installed|update|discover}\n' "$1" >&2; exit 2 ;;
+esac

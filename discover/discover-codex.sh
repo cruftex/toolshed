@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+unset TOOLSHED_OVERRIDE_TOOL_VERSION
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 source "$root/lib/install.sh"
 source "$root/lib/update.sh"
@@ -28,5 +29,4 @@ done
 for name in codex codex-code-mode-host; do
     record_checksums "$name" "$version/linux-x64" "$(cat "$staging/$name.archive-sha256")" "$(cat "$staging/$name.sha256")"
 done
-write_version_pin codex "$version"
-"$root/install/install-codex.sh"
+printf "%s\n" "$version"
