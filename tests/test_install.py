@@ -21,7 +21,7 @@ class InstallerTests(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
         self.repo = self.root / "repository with spaces"
-        for directory in ("install", "lib", "metadata", "pins", "discover"):
+        for directory in ("tools", "lib", "metadata", "pins"):
             shutil.copytree(ROOT / directory, self.repo / directory)
         self.downloads = self.root / "download cache"
         self.bin = self.root / "destination bin"
@@ -225,23 +225,23 @@ class InstallerTests(unittest.TestCase):
         uname.write_text('#!/bin/sh\ncase "$1" in -s) echo Linux;; -m) echo aarch64;; esac\n')
         uname.chmod(0o755)
         result = subprocess.run(
-            [self.repo / "install/install-bun.sh"], cwd=self.root,
+            [self.repo / "lib/install-tool.sh", "bun"], cwd=self.root,
             env=self.env, capture_output=True, text=True, timeout=30,
         )
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("No pinned Bun checksums for 1.4.4/linux-aarch64", result.stderr)
+        self.assertIn("No pinned bun checksum for 1.4.4/linux-aarch64", result.stderr)
         self.assertFalse(self.calls.exists())
         self.assertFalse(self.bin.exists())
 
     def test_unpinned_bun_version_fails_before_download(self):
-        installer = self.repo / "install/install-bun.sh"
+        installer = [self.repo / "lib/install-tool.sh", "bun"]
         (self.repo / "pins/bun").write_text("9.9.9\n")
         result = subprocess.run(
-            [installer], cwd=self.root, env=self.env,
+            installer, cwd=self.root, env=self.env,
             capture_output=True, text=True, timeout=30,
         )
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("No pinned Bun checksums for 9.9.9/linux-x64", result.stderr)
+        self.assertIn("No pinned bun checksum for 9.9.9/linux-x64", result.stderr)
         self.assertFalse(self.calls.exists())
         self.assertFalse(self.bin.exists())
 
@@ -252,7 +252,7 @@ class InstallerTests(unittest.TestCase):
             archive.writestr("bun-linux-aarch64/bun", binary)
         archive_digest = hashlib.sha256(self.archive.read_bytes()).hexdigest()
         binary_digest = hashlib.sha256(binary).hexdigest()
-        installer = self.repo / "install/install-bun.sh"
+        installer = [self.repo / "lib/install-tool.sh", "bun"]
         original_pin = (self.repo / "pins/bun").read_text()
         with (self.repo / 'metadata/artifacts/bun.psv').open('a') as f:
             f.write(f'9.9.9|/linux-aarch64/archive/zip|{archive_digest}|\n')
@@ -260,7 +260,7 @@ class InstallerTests(unittest.TestCase):
         uname.write_text('#!/bin/sh\ncase "$1" in -s) echo Linux;; -m) echo aarch64;; esac\n')
         uname.chmod(0o755)
         result = subprocess.run(
-            [installer], cwd=self.root, env=dict(self.env, TOOLSHED_OVERRIDE_TOOL_VERSION='9.9.9'),
+            installer, cwd=self.root, env=dict(self.env, TOOLSHED_OVERRIDE_TOOL_VERSION='9.9.9'),
             capture_output=True, text=True, timeout=30,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -297,11 +297,11 @@ class InstallerTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
 
     def test_override_without_recorded_checksum_rejected_before_download(self):
-        result = subprocess.run([self.repo / 'install/install-bun.sh'], cwd=self.root,
+        result = subprocess.run([self.repo / 'lib/install-tool.sh', 'bun'], cwd=self.root,
                                 env=dict(self.env, TOOLSHED_OVERRIDE_TOOL_VERSION='9.9.9'),
                                 capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn('No pinned Bun checksums', result.stderr)
+        self.assertIn('No pinned bun checksum', result.stderr)
         self.assertFalse(self.calls.exists())
 
     def test_binary_digest_failure_prevents_execution_and_replacement(self):
@@ -342,7 +342,7 @@ class InstallerTests(unittest.TestCase):
         self.bin.mkdir()
         (self.bin / "bun").write_text("previous Bun")
         result = subprocess.run(
-            [self.repo / "install/install-bun.sh"], cwd=self.root,
+            [self.repo / "lib/install-tool.sh", "bun"], cwd=self.root,
             env=self.env, capture_output=True, text=True, timeout=30,
         )
         self.assertNotEqual(result.returncode, 0)
@@ -383,7 +383,7 @@ elif '--import' not in sys.argv:
         gpg.chmod(0o755)
         self.env.update(HOME=str(self.root / "home"), SIGNED_RELEASE=str(release),
                         TEST_ARCHIVE=str(release / "claude"))
-        return self.repo / "install/install-claude.sh", release, binary
+        return self.repo / "tools/claude.sh", release, binary
 
     def write_mock_manifest(self, release, manifest):
         data = json.dumps(manifest).encode()
@@ -392,7 +392,7 @@ elif '--import' not in sys.argv:
 
     def run_claude(self, **environment):
         return subprocess.run(
-            [self.repo / "install/install-claude.sh"], cwd=self.root,
+            [self.repo / "lib/install-tool.sh", "claude"], cwd=self.root,
             env=dict(self.env, **environment), capture_output=True, text=True, timeout=30,
         )
 
@@ -536,7 +536,7 @@ elif '--import' not in sys.argv:
         _, release, _ = self.prepare_claude_fixture()
         for version in ("../escape", "latest", "2.1.322/../../escape"):
             (release / "latest").write_text(version)
-            result = subprocess.run([self.repo / "discover/discover-claude.sh"], cwd=self.root, env=self.env, capture_output=True, text=True)
+            result = subprocess.run([self.repo / "lib/discover-tool.sh", "claude"], cwd=self.root, env=self.env, capture_output=True, text=True)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("Invalid latest release version", result.stderr)
             self.assertFalse(self.bin.exists())
@@ -549,7 +549,7 @@ elif '--import' not in sys.argv:
         self.write_mock_manifest(release, {"version": "2.1.323", "platforms": {
             "linux-x64": {"checksum": hashlib.sha256(binary).hexdigest()},
         }})
-        upgrade = subprocess.run([self.repo / "discover/discover-claude.sh"], cwd=self.root, env=self.env, capture_output=True, text=True)
+        upgrade = subprocess.run([self.repo / "lib/discover-tool.sh", "claude"], cwd=self.root, env=self.env, capture_output=True, text=True)
         self.assertEqual(upgrade.returncode, 0, upgrade.stderr)
         self.assertNotEqual((self.bin / "claude").read_bytes(), binary)
         self.assertEqual((self.repo / "pins/claude").read_text(), "2.1.322\n")
@@ -575,7 +575,7 @@ elif '--import' not in sys.argv:
         _, release, _ = self.prepare_claude_fixture()
         (release / "latest").write_text("2.1.323")
         (release / "manifest.json.sig").write_text("invalid")
-        result = subprocess.run([self.repo / "discover/discover-claude.sh"], cwd=self.root,
+        result = subprocess.run([self.repo / "lib/discover-tool.sh", "claude"], cwd=self.root,
                                 env=self.env, capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual((self.repo / "pins/claude").read_text(), "2.1.322\n")
@@ -605,7 +605,7 @@ elif '--import' not in sys.argv:
         binary_stat = None
         for _ in range(2):
             result = subprocess.run(
-                [self.repo / "install/install-bun.sh"], cwd=self.root,
+                [self.repo / "lib/install-tool.sh", "bun"], cwd=self.root,
                 env=self.env, capture_output=True, text=True, timeout=30,
             )
             self.assertEqual(result.returncode, 0, result.stderr)
@@ -629,7 +629,7 @@ elif '--import' not in sys.argv:
         migrated = self.downloads / 'linux-x64/github.com/oven-sh/bun/releases/download/bun-v1.4.4/bun-linux-x64.zip'
         migrated.unlink()
         before = (self.bin / 'bun').read_bytes()
-        unavailable = subprocess.run([self.repo / 'install/install-bun.sh'], cwd=self.root,
+        unavailable = subprocess.run([self.repo / 'lib/install-tool.sh', 'bun'], cwd=self.root,
                                      env=dict(self.env, DOWNLOAD_MODE='fail'), capture_output=True, text=True)
         self.assertNotEqual(unavailable.returncode, 0)
         self.assertEqual((self.bin / 'bun').read_bytes(), before)
@@ -641,7 +641,7 @@ elif '--import' not in sys.argv:
         cache.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(os.environ["BUN_TEST_ARCHIVE"], cache)
         result = subprocess.run(
-            [self.repo / "install/install-bun.sh"], cwd=self.root,
+            [self.repo / "lib/install-tool.sh", "bun"], cwd=self.root,
             env=self.env, capture_output=True, text=True, timeout=30,
         )
         self.assertEqual(result.returncode, 0, result.stderr)

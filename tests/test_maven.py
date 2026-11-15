@@ -18,7 +18,7 @@ class MavenTests(unittest.TestCase):
         self.addCleanup(tmp.cleanup)
         self.root = Path(tmp.name)
         self.repo = self.root / 'repository with spaces'
-        for name in ('install', 'lib', 'metadata', 'pins', 'discover'):
+        for name in ('tools', 'lib', 'metadata', 'pins'):
             shutil.copytree(ROOT / name, self.repo / name)
         self.cache, self.bin, self.opt = (self.root / name for name in ('cache', 'bin', 'opt'))
         (self.repo / 'env').write_text('\n'.join(f'{k}={shlex.quote(str(v))}' for k, v in [('TOOLSHED_DOWNLOAD_DIR', self.cache), ('TOOLSHED_BIN_DIR', self.bin), ('TOOLSHED_OPT_DIR', self.opt)]) + '\n')
@@ -47,37 +47,37 @@ esac
         curl.chmod(0o755)
         self.env = dict(os.environ, PATH=f'{commands}:{os.environ["PATH"]}', TEST_ARCHIVE=str(self.archive), TEST_SHA512=self.sha512)
 
-    def run_script(self, path):
-        return subprocess.run([self.repo / path], cwd=self.root, env=self.env, capture_output=True, text=True)
+    def run_tool(self, action, tool):
+        return subprocess.run([self.repo / f'lib/{action}-tool.sh', tool], cwd=self.root, env=self.env, capture_output=True, text=True)
 
     def test_updater_selects_latest_patch_and_installs(self):
-        result = self.run_script('discover/discover-maven39.sh')
+        result = self.run_tool('discover', 'maven39')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual((self.repo / 'pins/maven39').read_text(), '3.9.16\n')
         self.assertEqual((self.repo / 'pins/maven310').read_text(), '3.10.0\n')
         self.assertIn(self.digest, (self.repo / 'metadata/artifacts/maven.psv').read_text())
         self.assertFalse(self.bin.exists())
         self.env['TOOLSHED_OVERRIDE_TOOL_VERSION'] = '3.9.17'
-        result = self.run_script('install/install-maven39.sh')
+        result = self.run_tool('install', 'maven39')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual((self.bin / 'mvn').resolve(), self.opt / 'maven/3.9.17/bin/mvn')
         self.assertEqual((self.bin / 'mvn39').resolve(), self.opt / 'maven/3.9.17/bin/mvn')
         (self.bin / 'mvn').unlink()
         (self.bin / 'mvn39').unlink()
         self.archive.unlink()
-        result = self.run_script('install/install-maven39.sh')
+        result = self.run_tool('install', 'maven39')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue((self.bin / 'mvn').is_symlink())
         self.assertTrue((self.bin / 'mvn39').is_symlink())
 
     def test_both_tracks_keep_their_own_entry_points(self):
-        for pin, version, installer in [('maven39', '3.9.16', 'install-maven39.sh'),
-                                        ('maven310', '3.10.0', 'install-maven310.sh')]:
+        for pin, version, installer in [('maven39', '3.9.16', 'maven39'),
+                                        ('maven310', '3.10.0', 'maven310')]:
             executable = self.opt / 'maven' / version / 'bin/mvn'
             executable.parent.mkdir(parents=True)
             executable.write_text(f'#!/bin/sh\necho "Apache Maven {version} (test)"\n')
             executable.chmod(0o755)
-            result = self.run_script('install/' + installer)
+            result = self.run_tool('install', installer)
             self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual((self.bin / 'mvn39').resolve(), self.opt / 'maven/3.9.16/bin/mvn')
         self.assertEqual((self.bin / 'mvn310').resolve(), self.opt / 'maven/3.10.0/bin/mvn')
@@ -87,16 +87,16 @@ esac
         self.bin.mkdir()
         (self.bin / 'mvn').write_text('existing')
         self.env['TEST_SHA512'] = '0' * 128
-        result = self.run_script('discover/discover-maven39.sh')
+        result = self.run_tool('discover', 'maven39')
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual((self.repo / 'pins/maven39').read_text(), '3.9.16\n')
         self.assertEqual((self.bin / 'mvn').read_text(), 'existing')
 
     def test_missing_archive_pin_rejected(self):
         (self.repo / 'pins/maven39').write_text('3.9.17\n')
-        result = self.run_script('install/install-maven39.sh')
+        result = self.run_tool('install', 'maven39')
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn('No pinned Maven archive', result.stderr)
+        self.assertIn('No pinned', result.stderr)
 
 
 if __name__ == '__main__':

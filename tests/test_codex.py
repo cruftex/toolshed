@@ -20,14 +20,12 @@ class CodexInstallerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="codex test ") as tmp:
             root = Path(tmp)
             repo = root / "repo with spaces"
-            shutil.copytree(ROOT / "install", repo / "install")
+            shutil.copytree(ROOT / "tools", repo / "tools")
             shutil.copytree(ROOT / "lib", repo / "lib")
             shutil.copytree(ROOT / "metadata", repo / "metadata")
             shutil.copytree(ROOT / "pins", repo / "pins")
             cache, dest = root / "cache", root / "bin"
             (repo / "env").write_text(f"TOOLSHED_DOWNLOAD_DIR={shlex.quote(str(cache))}\nTOOLSHED_BIN_DIR={shlex.quote(str(dest))}\nTOOLSHED_OPT_DIR={shlex.quote(str(root / 'opt'))}\n")
-            installer = repo / "install/install-codex.sh"
-            script = installer.read_text()
             binaries = {}
             for name, archive_pin, binary_pin in PINS:
                 asset = name + "-x86_64-unknown-linux-musl"
@@ -40,7 +38,6 @@ class CodexInstallerTests(unittest.TestCase):
                     tar.addfile(member, io.BytesIO(binary))
                 artifact_table = repo / 'metadata/artifacts/codex.psv'
                 artifact_table.write_text(artifact_table.read_text().replace(archive_pin, hashlib.sha256(archive.read_bytes()).hexdigest()))
-            installer.write_text(script)
             commands = root / "commands"
             commands.mkdir()
             curl = commands / "curl"
@@ -55,7 +52,7 @@ cp "$FIXTURES/${url##*/}" "$out"
             curl.chmod(0o755)
             env = dict(os.environ, PATH=f'{commands}:{os.environ["PATH"]}', FIXTURES=str(root))
             def run():
-                return subprocess.run([installer], cwd=root, env=env, capture_output=True, text=True)
+                return subprocess.run([repo / 'lib/install-tool.sh', 'codex'], cwd=root, env=env, capture_output=True, text=True)
             result = run()
             self.assertEqual(result.returncode, 0, result.stderr)
             for name in binaries:
@@ -78,7 +75,7 @@ cp "$FIXTURES/${url##*/}" "$out"
         with tempfile.TemporaryDirectory(prefix="codex update ") as tmp:
             root = Path(tmp)
             repo = root / "repo"
-            for directory in ("install", "lib", "metadata", "pins", "discover"):
+            for directory in ("tools", "lib", "metadata", "pins"):
                 shutil.copytree(ROOT / directory, repo / directory)
             cache, dest = root / "cache", root / "bin"
             (repo / "env").write_text(f"TOOLSHED_DOWNLOAD_DIR={shlex.quote(str(cache))}\nTOOLSHED_BIN_DIR={shlex.quote(str(dest))}\nTOOLSHED_OPT_DIR={shlex.quote(str(root / 'opt'))}\n")
@@ -109,12 +106,12 @@ if [[ $url == */latest ]]; then cp "$FIXTURES/release.json" "$out"; else cp "$FI
             curl.chmod(0o755)
             env = dict(os.environ, PATH=f'{commands}:{os.environ["PATH"]}', FIXTURES=str(root))
             old_pin = (repo / "pins/codex").read_text()
-            result = subprocess.run([repo / "discover/discover-codex.sh"], cwd=root, env=env, capture_output=True, text=True)
+            result = subprocess.run([repo / "lib/discover-tool.sh", "codex"], cwd=root, env=env, capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual((repo / "pins/codex").read_text(), old_pin)
             for name in binaries:
                 self.assertFalse((dest / name).exists())
                 component = 'host' if name == 'codex-code-mode-host' else ''
                 self.assertIn(f'0.170.0|{component}/linux-x64/archive/tar.gz|', (repo / 'metadata/artifacts/codex.psv').read_text())
-            again = subprocess.run([repo / "discover/discover-codex.sh"], cwd=root, env=env, capture_output=True, text=True)
+            again = subprocess.run([repo / "lib/discover-tool.sh", "codex"], cwd=root, env=env, capture_output=True, text=True)
             self.assertEqual(again.returncode, 0, again.stderr)

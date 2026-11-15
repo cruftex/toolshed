@@ -18,7 +18,7 @@ class GoInstallerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix='go install ') as temp:
             root = Path(temp)
             repo = root / 'repo'
-            for name in ('install', 'lib', 'metadata', 'pins', 'discover'):
+            for name in ('tools', 'lib', 'metadata', 'pins'):
                 shutil.copytree(ROOT / name, repo / name)
             values = [('TOOLSHED_DOWNLOAD_DIR', 'cache'), ('TOOLSHED_BIN_DIR', 'bin'), ('TOOLSHED_OPT_DIR', 'opt')]
             (repo / 'env').write_text('\n'.join(f'{k}={shlex.quote(str(root / v))}' for k, v in values) + '\n')
@@ -48,19 +48,19 @@ if [[ $url == *'?'* ]]; then cp "$FIXTURE/release.json" "$out"; else cp "$FIXTUR
             env = dict(os.environ, PATH=f'{commands}:{os.environ["PATH"]}', FIXTURE=str(root))
             pin = (repo / 'pins/go').read_text()
             for _ in range(2):
-                result = subprocess.run([repo / 'discover/discover-go.sh'], cwd=root, env=env, capture_output=True, text=True)
+                result = subprocess.run([repo / 'lib/discover-tool.sh', 'go'], cwd=root, env=env, capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(result.stdout.strip(), '1.28.1')
             self.assertEqual((repo / 'pins/go').read_text(), pin)
             self.assertEqual((repo / 'metadata/artifacts/go.psv').read_text().count('1.28.1|/linux-x64/archive/tar.gz|'), 1)
             env['TOOLSHED_OVERRIDE_TOOL_VERSION'] = '1.28.1'
             curl.rename(commands / 'disabled-curl')
-            result = subprocess.run([repo / 'install/install-go.sh'], cwd=root, env=env, capture_output=True, text=True)
+            result = subprocess.run([repo / 'lib/install-tool.sh', 'go'], cwd=root, env=env, capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertTrue((root / 'bin/go').is_symlink())
             self.assertEqual((root / 'opt/go/1.28.1/go.env').read_text(), 'GOTOOLCHAIN=local\n')
             (root / 'bin/gofmt').unlink()
-            result = subprocess.run([repo / 'install/install-go.sh'], cwd=root, env=env, capture_output=True, text=True)
+            result = subprocess.run([repo / 'lib/install-tool.sh', 'go'], cwd=root, env=env, capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertTrue((root / 'bin/gofmt').is_symlink())
             original = (root / 'bin/go').readlink()
@@ -68,6 +68,6 @@ if [[ $url == *'?'* ]]; then cp "$FIXTURE/release.json" "$out"; else cp "$FIXTUR
                 metadata.write(f'1.29.0|/linux-x64/archive/tar.gz|{digest}|\n')
             (root / 'cache/linux-x64/go.dev/dl/go1.29.0.linux-amd64.tar.gz').write_bytes(b'bad')
             env['TOOLSHED_OVERRIDE_TOOL_VERSION'] = '1.29.0'
-            result = subprocess.run([repo / 'install/install-go.sh'], cwd=root, env=env, capture_output=True, text=True)
+            result = subprocess.run([repo / 'lib/install-tool.sh', 'go'], cwd=root, env=env, capture_output=True, text=True)
             self.assertNotEqual(result.returncode, 0)
             self.assertEqual((root / 'bin/go').readlink(), original)

@@ -20,7 +20,7 @@ class NvmUpgradeTests(unittest.TestCase):
         self.addCleanup(tmp.cleanup)
         self.root = Path(tmp.name)
         self.repo = self.root / 'checkout with spaces'
-        for name in ('install', 'lib', 'pins', 'metadata'):
+        for name in ('tools', 'lib', 'pins', 'metadata'):
             shutil.copytree(ROOT / name, self.repo / name)
         self.nvm = self.root / 'nvm with spaces'
         self.nvm.mkdir()
@@ -58,7 +58,7 @@ class NvmUpgradeTests(unittest.TestCase):
         self.env = dict(os.environ, PATH=f'{commands}:{os.environ["PATH"]}')
 
     def run_installer(self):
-        return subprocess.run([self.repo / 'install/install-nvm.sh'], cwd=self.root, env=self.env, capture_output=True, text=True)
+        return subprocess.run([self.repo / 'lib/install-tool.sh', 'nvm'], cwd=self.root, env=self.env, capture_output=True, text=True)
 
     def test_cached_upgrade_preserves_user_data_and_backups(self):
         result = self.run_installer()

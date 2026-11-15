@@ -7,20 +7,20 @@
 License: GPLv2 with the Classpath Exception, from the archive's `legal/java.base/LICENSE`, stored as
 `metadata/license/4b9abebc….txt` (name in `4b9abebc….name.txt`).
 
-`./install/install-java25.sh` installs Eclipse Temurin 25.0.5+8 (Linux x86_64, glibc) under
+`shed install java25` installs Eclipse Temurin 25.0.5+8 (Linux x86_64, glibc) under
 `$TOOLSHED_OPT_DIR/java25/25.0.5` and links its tools into `TOOLSHED_BIN_DIR`. The
 [archive](https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.5%2B8/OpenJDK25U-jdk_x64_linux_hotspot_25.0.5_8.tar.gz)
 had locally calculated SHA-256 `68982529869257d0ee6b824ec5aa270ff8b118bb438670da0b97ebdab178d7fb`,
 matching Adoptium's published checksum. Smoke test 2026-11-15: installed twice from a verified cache;
 the second run skipped the matching installation. The build number is pinned in `metadata/java25-builds`.
-`./discover/discover-java25.sh` reads Adoptium's latest-release API and records the digest without moving the pin.
+`shed discover java25` reads Adoptium's latest-release API and records the digest without moving the pin.
 
 ### Oracle JDK 25 (`oracle-java25`)
 
 License: Oracle No-Fee Terms and Conditions (NFTC), stored as `metadata/license/df43f6a3….txt` (name in `df43f6a3….name.txt`)
 (plain-text extraction of Oracle's page, last updated 12 September 2021, fetched 2026-11-15). The installer prints it.
 
-Run `./install/install-oracle-java25.sh` to install Oracle JDK 25.0.5 on Linux
+Run `shed install oracle-java25` to install Oracle JDK 25.0.5 on Linux
 x86_64 with glibc. The installer verifies the version-specific archive against
 the SHA-256 in `metadata/artifacts/oracle-java25.psv` before extraction and installs the JDK under
 `$TOOLSHED_OPT_DIR/oracle-java25/25.0.5`. It does not link into `TOOLSHED_BIN_DIR`; source `profile.d/oracle-java25.sh`. It does not use SDKMAN, sudo, or modify shell profiles. Set
@@ -39,7 +39,7 @@ had locally calculated SHA-256
 matching [Oracle's checksum](https://download.oracle.com/java/25/archive/jdk-25.0.5_linux-x64_bin.tar.gz.sha256).
 A temporary-directory smoke test installed it twice, checked `java --version`,
 and compiled and ran a Java program.
-`./discover/discover-oracle-java25.sh` checks Oracle's current Java 25 release and published
+`shed discover oracle-java25` checks Oracle's current Java 25 release and published
 checksum, verifies and tests its archive, records its digest without moving the pin or installing it. Updates trust Oracle's release metadata and checksum over HTTPS.
 
 Activate the Node 24 and Java 25 collection in your current shell with
@@ -47,20 +47,20 @@ Activate the Node 24 and Java 25 collection in your current shell with
 they do not install them. Missing tools are skipped. Re-sourcing the belt
 preserves unrelated PATH changes without accumulating its own entries.
 
-Run `./install/install-codex.sh` to install Codex 0.169.0 and its matching
+Run `shed install codex` to install Codex 0.169.0 and its matching
 `codex-code-mode-host` on Linux x86_64 with glibc. Both executables are installed
 in `TOOLSHED_BIN_DIR`; verified cached archives are reused when needed.
 
 Bun and Vegeta use the same metadata layout: their pins are in `pins/`, and
 source archive digests are in `metadata/artifacts/`. Explicit updates use
-`./discover/discover-bun.sh` or `./discover/discover-vegeta.sh`. They verify archives
+`shed discover bun` or `shed discover vegeta`. They verify archives
 against GitHub release digests and record source checksums without running the
 installer. Vegeta's updater downloads all four supported
 platform archives. These GitHub digests rely on release metadata over HTTPS.
 
 The Codex pin is in `pins/codex`; the source archive digests for both
 components are in `metadata/artifacts/codex.psv`.
-Run `./discover/discover-codex.sh` to explicitly update Codex. It reads the latest
+Run `shed discover codex` to explicitly update Codex. It reads the latest
 stable GitHub release, verifies both downloaded archives against GitHub's release
 digests and records the source checksums without changing the pin
 or installing the release. This update trusts GitHub's release metadata over HTTPS; its digests
@@ -113,9 +113,9 @@ archive, including when the installed executable already matches.
 | [Vegeta 12.13.0 macOS x64](https://github.com/tsenart/vegeta/releases/download/v12.13.0/vegeta_12.13.0_darwin_amd64.tar.gz) | `4e912c83ce07db4e1e394e1cbb657f2396dff2f7ed90f03869a184cc17d0f994` |
 | [Vegeta 12.13.0 macOS ARM64](https://github.com/tsenart/vegeta/releases/download/v12.13.0/vegeta_12.13.0_darwin_arm64.tar.gz) | `fc408e242c4f4839e6fe536dbf1130bb02f430134827f6d831bf367a0929a799` |
 
-Run `./install/install-maven39.sh` for Apache Maven 3.9.16,
-`./install/install-maven310.sh` for Maven 3.10.0, and
-`./install/install-mvnd.sh` for Apache Maven Daemon 1.0.6 on Linux x86_64
+Run `shed install maven39` for Apache Maven 3.9.16,
+`shed install maven310` for Maven 3.10.0, and
+`shed install mvnd` for Apache Maven Daemon 1.0.6 on Linux x86_64
 with glibc. Java must be available. The distributions are installed under
 `$TOOLSHED_OPT_DIR/maven/<version>` and `$TOOLSHED_OPT_DIR/mvnd/1.0.6`, with `mvn`, `mvn39`, `mvn310`, and
 `mvnd` links in `TOOLSHED_BIN_DIR`. Existing incomplete installations are left in
@@ -124,9 +124,8 @@ its own Maven 3.9.16, independent of the separately installed Maven 3.10.0.
 It does not automatically enable the Maven Build Cache Extension. The most recently
 run Maven installer selects the `mvn` link; `mvn39` and `mvn310` remain
 independently available when both versions are installed.
-`install/install-maven.sh` remains an alias for the 3.10 installer.
 
-Run `./discover/discover-maven39.sh` or `./discover/discover-maven310.sh` to explicitly
+Run `shed discover maven39` or `shed discover maven310` to explicitly
 update a release line to its latest stable patch. Each updater reads Maven
 Central release metadata, downloads the Apache archive, compares its SHA-512
 with Apache’s published checksum, checks its version, records its SHA-256 and

@@ -1,0 +1,9 @@
+kind=bin
+repo=helm/helm
+tag=v
+url='https://get.helm.sh/helm-v{version}-linux-amd64.tar.gz'
+member=linux-amd64/helm
+checksum=sha256sum:.sha256sum
+version_args='version --short'
+version_match='v{version}*'
+license=apache-2.0

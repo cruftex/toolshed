@@ -10,22 +10,34 @@ root=$(cd -- "$(dirname -- "$script")/.." && pwd)
 case ${1:-} in
     available)
         [[ $# == 1 ]] || { printf 'Usage: shed available\n' >&2; exit 2; }
-        exec "$root/list-tools.sh"
+        exec python3 "$root/lib/tools.py" available "$root"
+        ;;
+    install)
+        shift
+        (( $# )) || { printf 'Usage: shed install TOOL...\n' >&2; exit 2; }
+        for tool in "$@"; do "$root/lib/install-tool.sh" "$tool"; done
+        ;;
+    discover)
+        if (( $# > 1 )); then
+            shift
+            for tool in "$@"; do "$root/lib/discover-tool.sh" "$tool"; done
+            exit
+        fi
+        printf 'Updating Toolshed checkout...\n'
+        git -C "$root" pull --ff-only
+        source "$root/env"
+        exec python3 "$root/lib/shed.py" discover "$TOOLSHED_BIN_DIR" "$TOOLSHED_OPT_DIR" "$TOOLSHED_NVM_DIR"
         ;;
     update)
         shift
         source "$root/env"
         exec python3 "$root/lib/shed.py" update "$TOOLSHED_BIN_DIR" "$TOOLSHED_OPT_DIR" "$TOOLSHED_NVM_DIR" "$@"
         ;;
-    installed|discover)
-        [[ $# == 1 ]] || { printf 'Usage: shed %s\n' "$1" >&2; exit 2; }
-        if [[ $1 == discover ]]; then
-            printf 'Updating Toolshed checkout...\n'
-            git -C "$root" pull --ff-only
-        fi
+    installed)
+        [[ $# == 1 ]] || { printf 'Usage: shed installed\n' >&2; exit 2; }
         source "$root/env"
         exec python3 "$root/lib/shed.py" "$1" "$TOOLSHED_BIN_DIR" "$TOOLSHED_OPT_DIR" "$TOOLSHED_NVM_DIR"
         ;;
-    -h|--help|'') printf 'Usage: shed {available|installed|update [--delay-days DAYS]|discover}\n' ;;
-    *) printf 'Unknown command: %s\nUsage: shed {available|installed|update|discover}\n' "$1" >&2; exit 2 ;;
+    -h|--help|'') printf 'Usage: shed {available|installed|install TOOL...|update [--delay-days DAYS]|discover [TOOL...]}\n' ;;
+    *) printf 'Unknown command: %s\nUsage: shed {available|installed|install|update|discover}\n' "$1" >&2; exit 2 ;;
 esac

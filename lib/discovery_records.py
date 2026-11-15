@@ -4,21 +4,20 @@ import sys
 from pathlib import Path
 
 from artifact_metadata import read_artifacts, record_artifact
-
-DIRECT = {'clusterctl', 'controller-gen', 'cosign', 'kind', 'kubebuilder',
-          'kubectl', 'setup-envtest', 'yq', 'claude'}
+from tools import artifact_kind, component_owner, load
 
 
 def location(root, name, key):
+    """The artifact table, version and artifact key for a discovery record of NAME (tool or component alias)."""
     version, platform = key.split('/')
     canonical = platform.replace('linux_', 'linux-').replace('darwin_', 'darwin-')
     canonical = canonical.replace('amd64', 'x64').replace('arm64', 'aarch64')
-    component = 'host' if name == 'codex-code-mode-host' else ''
-    table = 'codex' if component else ('maven' if name in ('maven39', 'maven310') else name)
+    tool, component = component_owner(name, root)
+    settings = load(tool, root)
+    path = root / 'metadata/artifacts' / f'{settings["table"]}.psv'
     if platform == 'license':
-        return root / 'metadata/artifacts' / f'{table}.psv', version, f'{component}/license'
-    kind = 'binary' if name in DIRECT else ('archive/zip' if name == 'bun' else 'archive/tar.gz')
-    return root / 'metadata/artifacts' / f'{table}.psv', version, f'{component}/{canonical}/{kind}'
+        return path, version, f'{component}/license'
+    return path, version, f'{component}/{canonical}/{artifact_kind(settings)}'
 
 
 if __name__ == '__main__':

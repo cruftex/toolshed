@@ -22,44 +22,48 @@ metadata changes with `./update-readme.py`.
 <!-- tools-table:start -->
 | Tool | Latest recorded version | Install strategy |
 | --- | --- | --- |
-| [bun](install/install-bun.sh) | 1.4.4 | Verified executable in bin |
-| [claude](install/install-claude.sh) | 2.1.325 | Signed manifest; executable in bin |
-| [cloud-provider-kind](install/install-cloud-provider-kind.sh) | 0.12.0 | Verified executable in bin |
-| [clusterctl](install/install-clusterctl.sh) | 1.14.4 | Verified executable in bin |
-| [codex](install/install-codex.sh) | 0.169.0 | Verified executables in bin |
-| [controller-gen](install/install-controller-gen.sh) | 0.23.0 | Verified executable in bin |
-| [cosign](install/install-cosign.sh) | 3.1.4 | Verified executable in bin |
-| [crane](install/install-crane.sh) | 0.22.1 | Verified executable in bin |
-| [go](install/install-go.sh) | 1.27.4 | Verified package in opt; entry points in bin |
-| [golangci-lint](install/install-golangci-lint.sh) | 2.15.0 | Verified executable in bin |
-| [helm](install/install-helm.sh) | 3.19.0 | Verified executable in bin |
-| [java25](install/install-java25.sh) | 25.0.5 | Verified package in opt; entry points in bin; source [`profile.d/java25.sh`](profile.d/java25.sh) |
-| [kind](install/install-kind.sh) | 0.30.0 | Verified executable in bin |
-| [kubebuilder](install/install-kubebuilder.sh) | 4.16.0 | Verified executable in bin |
-| [kubectl](install/install-kubectl.sh) | 1.34.1 | Verified executable in bin |
-| [kustomize](install/install-kustomize.sh) | 5.8.3 | Verified executable in bin |
-| [maven310](install/install-maven310.sh) | 3.10.0 | Verified package in opt; entry points in bin |
-| [maven39](install/install-maven39.sh) | 3.9.16 | Verified package in opt; entry points in bin |
-| [mvnd](install/install-mvnd.sh) | 1.0.6 | Verified package in opt; entry points in bin |
-| [node24](install/install-node24.sh) | 24.22.3 | Verified archive in NVM directory; source [`profile.d/node24.sh`](profile.d/node24.sh) |
-| [nvm](install/install-nvm.sh) | 0.41.0 | Verified Git archive in NVM directory |
-| [oracle-java25](install/install-oracle-java25.sh) | 25.0.5 | Verified package in opt; activate with profile; source [`profile.d/oracle-java25.sh`](profile.d/oracle-java25.sh) |
-| [setup-envtest](install/install-setup-envtest.sh) | 0.25.2 | Verified executable in bin |
-| [trivy](install/install-trivy.sh) | 0.76.2 | Verified executable in bin |
-| [vegeta](install/install-vegeta.sh) | 12.13.0 | Verified executable in bin |
-| [yq](install/install-yq.sh) | 4.54.3 | Verified executable in bin |
+| [bun](tools/bun.sh) | 1.4.4 | Verified executable in bin |
+| [claude](tools/claude.sh) | 2.1.325 | Signed manifest; executable in bin |
+| [cloud-provider-kind](tools/cloud-provider-kind.sh) | 0.12.0 | Verified executable in bin |
+| [clusterctl](tools/clusterctl.sh) | 1.14.4 | Verified executable in bin |
+| [codex](tools/codex.sh) | 0.169.0 | Verified executables in bin |
+| [controller-gen](tools/controller-gen.sh) | 0.23.0 | Verified executable in bin |
+| [cosign](tools/cosign.sh) | 3.1.4 | Verified executable in bin |
+| [crane](tools/crane.sh) | 0.22.1 | Verified executable in bin |
+| [go](tools/go.sh) | 1.27.4 | Verified package in opt; entry points in bin |
+| [golangci-lint](tools/golangci-lint.sh) | 2.15.0 | Verified executable in bin |
+| [helm](tools/helm.sh) | 3.19.0 | Verified executable in bin |
+| [java25](tools/java25.sh) | 25.0.5 | Eclipse Temurin; verified package in opt; entry points in bin; source [`profile.d/java25.sh`](profile.d/java25.sh) |
+| [kind](tools/kind.sh) | 0.30.0 | Verified executable in bin |
+| [kubebuilder](tools/kubebuilder.sh) | 4.16.0 | Verified executable in bin |
+| [kubectl](tools/kubectl.sh) | 1.34.1 | Verified executable in bin |
+| [kustomize](tools/kustomize.sh) | 5.8.3 | Verified executable in bin |
+| [maven310](tools/maven310.sh) | 3.10.0 | Verified package in opt; entry points in bin |
+| [maven39](tools/maven39.sh) | 3.9.16 | Verified package in opt; entry points in bin |
+| [mvnd](tools/mvnd.sh) | 1.0.6 | Verified package in opt; entry points in bin |
+| [node24](tools/node24.sh) | 24.22.3 | Verified archive in NVM directory; source [`profile.d/node24.sh`](profile.d/node24.sh) |
+| [nvm](tools/nvm.sh) | 0.41.0 | Verified Git archive in NVM directory |
+| [oracle-java25](tools/oracle-java25.sh) | 25.0.5 | Oracle JDK; verified package in opt; activate with profile; source [`profile.d/oracle-java25.sh`](profile.d/oracle-java25.sh) |
+| [setup-envtest](tools/setup-envtest.sh) | 0.25.2 | Verified executable in bin |
+| [trivy](tools/trivy.sh) | 0.76.2 | Verified executable in bin |
+| [vegeta](tools/vegeta.sh) | 12.13.0 | Verified executable in bin |
+| [yq](tools/yq.sh) | 4.54.3 | Verified executable in bin |
 <!-- tools-table:end -->
 
-Run `./install/install-toolshed.sh` to link `shed` into `TOOLSHED_BIN_DIR`,
+Run `./bin/shed install toolshed` to link `shed` into `TOOLSHED_BIN_DIR`,
 then run `shed available` to see tools, their default pins, and recorded versions.
-The link points into this checkout, which must remain in place. You can also
-run `./bin/shed available` directly.
-Install a tool with its `install/install-<tool>.sh` script; for example:
+The link points into this checkout, which must remain in place.
+Install tools with `shed install`; for example:
 
 ```bash
-./install/install-bun.sh
-TOOLSHED_OVERRIDE_TOOL_VERSION=3.9.16 ./install/install-maven39.sh
+shed install bun kubectl
+TOOLSHED_OVERRIDE_TOOL_VERSION=3.9.16 shed install maven39
 ```
+
+Each tool is described by a single file, `tools/<tool>.sh`: a few `key=value`
+settings (where it goes — `bin`, `opt` or `scripted` — download URL, archive
+member, version check, license) and, where needed, small hook functions. The
+generic install and discovery logic lives in `lib/`.
 
 Java, Maven, Maven Daemon, Bun, Codex, Node, NVM, Go, kubectl, Helm, kind, clusterctl, and the controller and release tools currently support Linux
 x86_64 with glibc. Claude also supports Linux arm64 with glibc; Vegeta supports
@@ -87,14 +91,14 @@ Each tool version's license text is stored once in `metadata/license/<sha256>.tx
 `oracle-nftc`; Eclipse Temurin uses GPLv2 with the Classpath Exception, `gpl-2.0-classpath`).
 Licenses were backfilled for all current tools from the project's `LICENSE` file at the release tag
 (Claude Code: its `LICENSE.md`, `proprietary`; Bun and Node.js include bundled third-party licenses, `mit+third-party`).
-Discovery records the license automatically (`record_license` in `lib/update.sh`) for every tool that has a discover script; mvnd, Node.js and NVM have none yet.
+Discovery records the license automatically for every tool with discovery; mvnd, Node.js and NVM have none yet.
 
 ## Activation
 
 Most commands are available in `TOOLSHED_BIN_DIR` after installation. Source
 `profile.d/node24.sh` to activate Node, or `profile.d/java25.sh` to set
 `JAVA_HOME` and activate Eclipse Temurin Java. Oracle JDK is installed by
-`install-oracle-java25.sh` into opt only (no `bin` links); source
+`shed install oracle-java25` into opt only (no `bin` links); source
 `profile.d/oracle-java25.sh` to use it. Source `belts/n24j25.sh` to activate both in the
 current shell. These scripts do not install missing tools.
 The profiles select the pinned versions, including after an installation with
@@ -124,7 +128,7 @@ may identify the proxy rather than the publisher. Missing values are recorded as
 null. Update eligibility reads discovery times from `metadata/artifacts/` rather
 than provenance. Existing entries without a recorded time are
 not eligible for delayed updates until rediscovered; `--delay-days 0` permits
-them immediately. Tools without discovery scripts retain their existing pins.
+them immediately. Tools without discovery retain their existing pins.
 When a verified rediscovery fills a missing peer address or effective URL, its
 observation time is recorded separately; it does not change an existing discovery time.
 Backfilled entries marked `timestamp_source: cache_mtime` use the verified local
@@ -157,15 +161,14 @@ unpartitioned downloads are verified and copied into the platform cache on use;
 the originals are left in place. NVM's prepared Git archive follows the same
 layout. Normal installs remain offline when the required verified cache exists.
 
-Scripts in `discover/` discover and cache verified releases without installing
-them. Normal installers use the repository’s pins unless a version is selected.
+`shed discover [TOOL...]` discovers and caches verified releases without installing
+them. Normal installs use the repository’s pins unless a version is selected.
 Claude’s built-in updater is disabled; use `shed discover` and `shed update`. Downloads, including cached files, are
 verified before use. See [release verification records](docs/release-verification.md)
 for archive checksums, sources, and smoke tests.
 
 The GitHub Actions discovery workflow runs daily and can also be started manually.
-It checks discovery scripts on Linux x86_64 until one produces new metadata, then
-scans every tool and commits each tool's verified metadata separately to `main`.
+It runs discovery on Linux x86_64 for every tool with discovery, scanning every tool and commits each tool's verified metadata separately to `main`.
 If a discovery fails, the workflow continues scanning other tools and reports a
 failure after pushing successful commits. Repository settings must permit the
 workflow token to push to `main`, including any applicable branch protection rules.

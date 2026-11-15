@@ -49,7 +49,7 @@ class UpdateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix='bun update ') as temp:
             root = Path(temp)
             repo = root / 'repo with spaces'
-            for directory in ('install', 'lib', 'metadata', 'pins', 'discover'):
+            for directory in ('tools', 'lib', 'metadata', 'pins'):
                 shutil.copytree(ROOT / directory, repo / directory)
             (repo / 'env').write_text('\n'.join(f'{key}={shlex.quote(str(root / value))}' for key, value in [('TOOLSHED_DOWNLOAD_DIR','cache'), ('TOOLSHED_BIN_DIR','bin'), ('TOOLSHED_OPT_DIR','opt')]) + '\n')
             binary = b"#!/bin/sh\nprintf '1.5.0\\n'\n"
@@ -76,7 +76,7 @@ printf '192.0.2.10\\n%s\\n' "${url%/latest}/redirected"
                        TOOLSHED_OVERRIDE_TOOL_VERSION='invalid-discovery-override')
             old_pin = (repo / 'pins/bun').read_text()
             for _ in range(2):
-                result = subprocess.run([repo / 'discover/discover-bun.sh'], cwd=root, env=env, capture_output=True, text=True)
+                result = subprocess.run([repo / 'lib/discover-tool.sh', 'bun'], cwd=root, env=env, capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual((repo / 'pins/bun').read_text(), old_pin)
             self.assertFalse((root / 'bin/bun').exists())
@@ -94,7 +94,7 @@ printf '192.0.2.10\\n%s\\n' "${url%/latest}/redirected"
         with tempfile.TemporaryDirectory(prefix='kubernetes discovery ') as temp:
             root = Path(temp)
             repo = root / 'repo'
-            for directory in ('install', 'lib', 'metadata', 'pins', 'discover'):
+            for directory in ('tools', 'lib', 'metadata', 'pins'):
                 shutil.copytree(ROOT / directory, repo / directory)
             (repo / 'env').write_text('\n'.join(f'{key}={shlex.quote(str(root / value))}' for key, value in [('TOOLSHED_DOWNLOAD_DIR', 'cache'), ('TOOLSHED_BIN_DIR', 'bin'), ('TOOLSHED_OPT_DIR', 'opt')]) + '\n')
             commands = root / 'commands'
@@ -128,7 +128,7 @@ if [[ $url == */latest ]]; then cp "$FIXTURE/release.json" "$out"; else cp "$FIX
                     (root / checksum_name).write_text(digest + ('' if tool == 'kubectl' else '  ' + asset) + '\n')
                     pin = (repo / 'pins' / tool).read_text()
                     for _ in range(2):
-                        result = subprocess.run([repo / 'discover' / f'discover-{tool}.sh'], env=env, capture_output=True, text=True)
+                        result = subprocess.run([repo / 'lib/discover-tool.sh', tool], env=env, capture_output=True, text=True)
                         self.assertEqual(result.returncode, 0, result.stderr)
                         self.assertEqual(result.stdout.strip(), version)
                     self.assertEqual((repo / 'pins' / tool).read_text(), pin)
@@ -136,14 +136,14 @@ if [[ $url == */latest ]]; then cp "$FIXTURE/release.json" "$out"; else cp "$FIX
                     self.assertEqual(metadata.count(f'{version}|/linux-x64/'), 1)
                     env['TOOLSHED_OVERRIDE_TOOL_VERSION'] = version
                     curl.rename(commands / 'curl.disabled')
-                    result = subprocess.run([repo / 'install' / f'install-{tool}.sh'], env=env, capture_output=True, text=True)
+                    result = subprocess.run([repo / 'lib/install-tool.sh', tool], env=env, capture_output=True, text=True)
                     self.assertEqual(result.returncode, 0, result.stderr)
                     self.assertTrue((root / 'bin' / tool).is_file())
                     (commands / 'curl.disabled').rename(curl)
                     del env['TOOLSHED_OVERRIDE_TOOL_VERSION']
                     (root / checksum_name).write_text('0' * 64 + ('' if tool == 'kubectl' else '  ' + asset) + '\n')
                     before = (repo / 'metadata/artifacts' / f'{tool}.psv').read_bytes()
-                    result = subprocess.run([repo / 'discover' / f'discover-{tool}.sh'], env=env, capture_output=True, text=True)
+                    result = subprocess.run([repo / 'lib/discover-tool.sh', tool], env=env, capture_output=True, text=True)
                     self.assertNotEqual(result.returncode, 0)
                     self.assertEqual((repo / 'metadata/artifacts' / f'{tool}.psv').read_bytes(), before)
                     self.assertEqual((repo / 'pins' / tool).read_text(), pin)
@@ -152,7 +152,7 @@ if [[ $url == */latest ]]; then cp "$FIXTURE/release.json" "$out"; else cp "$FIX
         with tempfile.TemporaryDirectory(prefix='cluster discovery ') as temp:
             root = Path(temp)
             repo = root / 'repo'
-            for directory in ('install', 'lib', 'metadata', 'pins', 'discover'):
+            for directory in ('tools', 'lib', 'metadata', 'pins'):
                 shutil.copytree(ROOT / directory, repo / directory)
             (repo / 'env').write_text('\n'.join(f'{key}={shlex.quote(str(root / value))}' for key, value in [('TOOLSHED_DOWNLOAD_DIR', 'cache'), ('TOOLSHED_BIN_DIR', 'bin'), ('TOOLSHED_OPT_DIR', 'opt')]) + '\n')
             commands = root / 'commands'
@@ -178,21 +178,21 @@ if [[ $url == */latest ]]; then cp "$FIXTURE/release.json" "$out"; else cp "$FIX
                     (root / 'release.json').write_text(json.dumps(release))
                     pin = (repo / 'pins' / tool).read_text()
                     for _ in range(2):
-                        result = subprocess.run([repo / 'discover' / f'discover-{tool}.sh'], env=env, capture_output=True, text=True)
+                        result = subprocess.run([repo / 'lib/discover-tool.sh', tool], env=env, capture_output=True, text=True)
                         self.assertEqual(result.returncode, 0, result.stderr)
                         self.assertEqual(result.stdout.strip(), version)
                     self.assertEqual((repo / 'pins' / tool).read_text(), pin)
                     self.assertEqual((repo / 'metadata/artifacts' / f'{tool}.psv').read_text().count(f'{version}|/linux-x64/'), 1)
                     env['TOOLSHED_OVERRIDE_TOOL_VERSION'] = version
                     curl.rename(commands / 'curl.disabled')
-                    result = subprocess.run([repo / 'install' / f'install-{tool}.sh'], env=env, capture_output=True, text=True)
+                    result = subprocess.run([repo / 'lib/install-tool.sh', tool], env=env, capture_output=True, text=True)
                     self.assertEqual(result.returncode, 0, result.stderr)
                     (commands / 'curl.disabled').rename(curl)
                     del env['TOOLSHED_OVERRIDE_TOOL_VERSION']
                     release['assets'][0]['digest'] = 'sha256:' + '0' * 64
                     (root / 'release.json').write_text(json.dumps(release))
                     before = (repo / 'metadata/artifacts' / f'{tool}.psv').read_bytes()
-                    result = subprocess.run([repo / 'discover' / f'discover-{tool}.sh'], env=env, capture_output=True, text=True)
+                    result = subprocess.run([repo / 'lib/discover-tool.sh', tool], env=env, capture_output=True, text=True)
                     self.assertNotEqual(result.returncode, 0)
                     self.assertEqual((repo / 'metadata/artifacts' / f'{tool}.psv').read_bytes(), before)
 
@@ -200,7 +200,7 @@ if [[ $url == */latest ]]; then cp "$FIXTURE/release.json" "$out"; else cp "$FIX
         with tempfile.TemporaryDirectory(prefix='controller discovery ') as temp:
             root = Path(temp)
             repo = root / 'repo'
-            for directory in ('install', 'lib', 'metadata', 'pins', 'discover'):
+            for directory in ('tools', 'lib', 'metadata', 'pins'):
                 shutil.copytree(ROOT / directory, repo / directory)
             (repo / 'env').write_text('\n'.join(f'{key}={shlex.quote(str(root / value))}' for key, value in [('TOOLSHED_DOWNLOAD_DIR', 'cache'), ('TOOLSHED_BIN_DIR', 'bin'), ('TOOLSHED_OPT_DIR', 'opt')]) + '\n')
             commands = root / 'commands'
@@ -224,20 +224,20 @@ if [[ $url == */latest ]]; then cp "$FIXTURE/release.json" "$out"; else cp "$FIX
             (root / 'release.json').write_text(json.dumps(release))
             pin = (repo / 'pins/controller-gen').read_text()
             for _ in range(2):
-                result = subprocess.run([repo / 'discover/discover-controller-gen.sh'], env=env, capture_output=True, text=True)
+                result = subprocess.run([repo / 'lib/discover-tool.sh', 'controller-gen'], env=env, capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual((repo / 'pins/controller-gen').read_text(), pin)
             self.assertEqual((repo / 'metadata/artifacts/controller-gen.psv').read_text().count('0.24.0|/linux-x64/binary|'), 1)
             env['TOOLSHED_OVERRIDE_TOOL_VERSION'] = version
             curl.rename(commands / 'curl.disabled')
-            result = subprocess.run([repo / 'install/install-controller-gen.sh'], env=env, capture_output=True, text=True)
+            result = subprocess.run([repo / 'lib/install-tool.sh', 'controller-gen'], env=env, capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             (commands / 'curl.disabled').rename(curl)
             del env['TOOLSHED_OVERRIDE_TOOL_VERSION']
             release['assets'][0]['digest'] = 'sha256:' + '0' * 64
             (root / 'release.json').write_text(json.dumps(release))
             before = (repo / 'metadata/artifacts/controller-gen.psv').read_bytes()
-            result = subprocess.run([repo / 'discover/discover-controller-gen.sh'], env=env, capture_output=True, text=True)
+            result = subprocess.run([repo / 'lib/discover-tool.sh', 'controller-gen'], env=env, capture_output=True, text=True)
             self.assertNotEqual(result.returncode, 0)
             self.assertEqual((repo / 'metadata/artifacts/controller-gen.psv').read_bytes(), before)
 
@@ -245,7 +245,7 @@ if [[ $url == */latest ]]; then cp "$FIXTURE/release.json" "$out"; else cp "$FIX
         with tempfile.TemporaryDirectory(prefix='vegeta update ') as temp:
             root = Path(temp)
             repo = root / 'repo'
-            for directory in ('install', 'lib', 'metadata', 'pins', 'discover'):
+            for directory in ('tools', 'lib', 'metadata', 'pins'):
                 shutil.copytree(ROOT / directory, repo / directory)
             (repo / 'env').write_text('\n'.join(f'{key}={shlex.quote(str(root / value))}' for key, value in [('TOOLSHED_DOWNLOAD_DIR','cache'), ('TOOLSHED_BIN_DIR','bin'), ('TOOLSHED_OPT_DIR','opt')]) + '\n')
             binary = b"#!/bin/sh\nprintf 'Version: v12.14.0\\n'\n"
@@ -272,7 +272,7 @@ if [[ $url == */latest ]]; then cp "$FIXTURE/release.json" "$out"; else cp "$FIX
             curl.chmod(0o755)
             env = dict(os.environ, PATH=f'{commands}:{os.environ["PATH"]}', FIXTURE=str(root))
             old_pin = (repo / 'pins/vegeta').read_text()
-            result = subprocess.run([repo / 'discover/discover-vegeta.sh'], cwd=root, env=env, capture_output=True, text=True)
+            result = subprocess.run([repo / 'lib/discover-tool.sh', 'vegeta'], cwd=root, env=env, capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn('12.14.0|/license|', (repo / 'metadata/artifacts/vegeta.psv').read_text())
             digest = hashlib.sha256(b'license text\n').hexdigest()
@@ -290,7 +290,7 @@ if [[ $url == */latest ]]; then cp "$FIXTURE/release.json" "$out"; else cp "$FIX
             before = metadata.read_bytes()
             pin = (repo / 'pins/vegeta').read_bytes()
             self.assertFalse((root / 'bin/vegeta').exists())
-            result = subprocess.run([repo / 'discover/discover-vegeta.sh'], cwd=root, env=env, capture_output=True, text=True)
+            result = subprocess.run([repo / 'lib/discover-tool.sh', 'vegeta'], cwd=root, env=env, capture_output=True, text=True)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn('Conflicting archive metadata', result.stderr)
             self.assertEqual(metadata.read_bytes(), before)

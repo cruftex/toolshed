@@ -1,0 +1,10 @@
+kind=bin
+repo=oven-sh/bun
+tag=bun-v
+asset='bun-{platform}.zip'
+member='bun-{platform}/bun'
+archive=zip
+links=bun=bunx
+version_match='{version}'
+license=mit+third-party
+license_file=LICENSE.md

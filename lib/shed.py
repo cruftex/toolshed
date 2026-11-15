@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 from artifact_metadata import read_artifacts
+import tools
 
 root = Path(__file__).resolve().parent.parent
 bin_dir, opt_dir, nvm_dir = map(Path, sys.argv[2:5])
@@ -32,70 +33,97 @@ def version_tuple(version):
     return tuple(map(int, version.split('.')))
 
 
-def executable_version(path, args=('--version',)):
+def executable_version(path, args=('--version',), env=None):
     if not path.is_file() or not os.access(path, os.X_OK):
         return None
     try:
         result = subprocess.run([str(path), *args], stdout=subprocess.PIPE,
                                 stderr=subprocess.STDOUT, text=True, timeout=15,
-                                env=dict(os.environ, CLUSTERCTL_DISABLE_VERSIONCHECK='true', GOTOOLCHAIN='local'))
+                                env=dict(os.environ, **(env or {})))
         return (parse_version(result.stdout) or '?') if result.returncode == 0 else '?'
     except (OSError, subprocess.TimeoutExpired):
         return '?'
 
 
-def installed_tools():
-    result = {}
-    for name, filename in [('bun', 'bun'), ('claude', 'claude'), ('codex', 'codex'),
-                           ('vegeta', 'vegeta'), ('go', 'go'), ('cloud-provider-kind', 'cloud-provider-kind'), ('kubebuilder', 'kubebuilder'), ('controller-gen', 'controller-gen'), ('golangci-lint', 'golangci-lint'), ('kustomize', 'kustomize'), ('crane', 'crane'), ('cosign', 'cosign'), ('trivy', 'trivy'), ('yq', 'yq'), ('helm', 'helm'), ('kubectl', 'kubectl'), ('kind', 'kind'), ('clusterctl', 'clusterctl'), ('java25', 'java'),
-                           ('maven39', 'mvn39'), ('maven310', 'mvn310')]:
-        version = executable_version(bin_dir / filename, ('version', '--client') if name == 'kubectl' else (('version', '--short') if name == 'helm' else (('version',) if name in ('go', 'kind', 'cloud-provider-kind', 'kubebuilder', 'golangci-lint', 'kustomize', 'crane', 'cosign', 'trivy') else (('version', '-o', 'short') if name == 'clusterctl' else ('--version',)))))
-        if version is not None:
-            result[name] = version
-    # setup-envtest has no version flag; identify its verified bytes by recorded digest.
-    envtest = bin_dir / 'setup-envtest'
-    if envtest.is_file() and os.access(envtest, os.X_OK):
+def detect_version(name, settings):
+    """The installed version of a tool, None when absent, or '?' when it cannot be determined."""
+    detect = settings['detect']
+    executable = bin_dir / settings['executable']
+    if detect == 'run':
+        env = dict(item.split('=', 1) for item in settings['version_env'].split())
+        return executable_version(executable, tuple(settings['version_args'].split()), env)
+    if detect == 'digest':
+        # No version flag; identify the verified bytes by their recorded digest.
+        if not executable.is_file() or not os.access(executable, os.X_OK):
+            return None
         try:
-            with envtest.open('rb') as stream:
+            with executable.open('rb') as stream:
                 digest = hashlib.file_digest(stream, 'sha256').hexdigest()
-            records = read_artifacts(root / 'metadata/artifacts/setup-envtest.psv')
+            records = read_artifacts(root / 'metadata/artifacts' / f'{settings["table"]}.psv')
             matches = [version for (version, artifact), row in records.items()
                        if artifact == '/linux-x64/binary' and row['sha256'] == digest]
-            result['setup-envtest'] = max(matches, key=version_tuple) if matches else '?'
+            return max(matches, key=version_tuple) if matches else '?'
         except (OSError, ValueError):
-            result['setup-envtest'] = '?'
-    mvnd = bin_dir / 'mvnd'
-    if mvnd.is_file() and os.access(mvnd, os.X_OK):
-        # Avoid starting a daemon merely to display status.
-        resolved = mvnd.resolve()
+            return '?'
+    if detect == 'link':
+        # Read the version from the linked package directory instead of running the tool.
+        if not executable.is_file() or not os.access(executable, os.X_OK):
+            return None
         try:
-            relative = resolved.relative_to(opt_dir.resolve() / 'mvnd')
-            result['mvnd'] = relative.parts[0] if len(relative.parts) == 3 and parse_version(relative.parts[0]) == relative.parts[0] else '?'
+            relative = executable.resolve().relative_to(opt_dir.resolve() / settings['table'])
         except ValueError:
-            result['mvnd'] = '?'
-    nvm = nvm_dir / 'nvm.sh'
-    if nvm.is_file():
+            return '?'
+        return relative.parts[0] if len(relative.parts) == 3 and parse_version(relative.parts[0]) == relative.parts[0] else '?'
+    if detect == 'dirs':
+        home = opt_dir / settings['table']
+        versions = [path.name for path in home.iterdir()
+                    if parse_version(path.name) == path.name] if home.is_dir() else []
+        return max(versions, key=version_tuple) if versions else None
+    if detect == 'nvm':
+        nvm = nvm_dir / 'nvm.sh'
+        if not nvm.is_file():
+            return None
         try:
             run = subprocess.run(['bash', '-c', 'source "$1" --no-use; nvm --version', '_', str(nvm)],
                                  env=dict(os.environ, NVM_DIR=str(nvm_dir)), stdout=subprocess.PIPE,
                                  stderr=subprocess.STDOUT, text=True, timeout=15)
-            result['nvm'] = parse_version(run.stdout) if run.returncode == 0 else '?'
-            result['nvm'] = result['nvm'] or '?'
+            return (parse_version(run.stdout) if run.returncode == 0 else None) or '?'
         except (OSError, subprocess.TimeoutExpired):
-            result['nvm'] = '?'
-    node_root = nvm_dir / 'versions/node'
-    if node_root.is_dir():
-        versions = []
-        for path in node_root.iterdir():
-            if re.fullmatch(r'v24\.\d+\.\d+', path.name):
-                value = executable_version(path / 'bin/node')
-                if value is not None:
-                    versions.append(value)
-                    node_versions.append(value)
+            return '?'
+    if detect == 'node':
+        node_root = nvm_dir / 'versions/node'
+        prefix = 'v' + settings['name'].removeprefix('node')
+        versions = [value for path in (node_root.iterdir() if node_root.is_dir() else [])
+                    if re.fullmatch(re.escape(prefix) + r'\.\d+\.\d+', path.name)
+                    for value in [executable_version(path / 'bin/node')] if value is not None]
+        node_versions.extend(versions)
         known = [v for v in versions if v != '?']
-        if versions:
-            result['node24'] = max(known, key=version_tuple) if known else '?'
+        return (max(known, key=version_tuple) if known else '?') if versions else None
+    return None
+
+
+def installed_tools():
+    result = {}
+    for name in tools.names(root):
+        version = detect_version(name, tools.load(name, root))
+        if version is not None:
+            result[name] = version
     return result
+
+
+def descriptor_rows(name):
+    """Recorded download rows for the host platform, grouped by version as {version: [rows]}."""
+    settings = tools.load(name, root)
+    platform = subprocess.run([str(root / 'lib/platform.sh')], capture_output=True,
+                              text=True, check=True).stdout.strip()
+    records = read_artifacts(root / 'metadata/artifacts' / f'{settings["table"]}.psv')
+    grouped = {}
+    for (version, artifact), row in records.items():
+        if artifact.split('/')[1] == platform and row['sha256'] and version.startswith(settings['version_prefix']):
+            grouped.setdefault(version, []).append(row)
+    required = {''} | {pair.split('=', 1)[0] for pair in settings['components'].split()}
+    return {version: rows for version, rows in grouped.items()
+            if required <= {row['artifact'].split('/')[0] for row in rows}}
 
 
 def recorded_versions(name):
@@ -104,26 +132,10 @@ def recorded_versions(name):
         registry = root / 'metadata/claude-versions'
         versions = registry.read_text().splitlines() if registry.is_file() else []
         return [v for v in set(versions + [pin]) if re.fullmatch(r'\d+\.\d+\.\d+', v)]
-    metadata_name = 'maven' if name in ('maven39', 'maven310') else name
     try:
-        platform = subprocess.run([str(root / 'lib/platform.sh')], capture_output=True,
-                                  text=True, check=True).stdout.strip()
-        records = read_artifacts(root / 'metadata/artifacts' / f'{metadata_name}.psv')
-        grouped = {}
-        for (version, artifact), row in records.items():
-            parts = artifact.split('/')
-            if parts[1] != platform or not row['sha256']:
-                continue
-            if name == 'maven39' and not version.startswith('3.9.'):
-                continue
-            if name == 'maven310' and not version.startswith('3.10.'):
-                continue
-            grouped.setdefault(version, set()).add(parts[0])
-        return [version for version, components in grouped.items()
-                if '' in components and (name != 'codex' or 'host' in components)]
+        return list(descriptor_rows(name))
     except (OSError, subprocess.CalledProcessError, ValueError):
         return []
-
 
 
 def target(name, delay_days=None):
@@ -131,13 +143,9 @@ def target(name, delay_days=None):
     if delay_days is not None and delay_days > 0:
         pin = (root / 'pins' / name).read_text().strip()
         try:
-            platform = subprocess.run([str(root / 'lib/platform.sh')], capture_output=True,
-                                      text=True, check=True).stdout.strip()
-            metadata_name = 'maven' if name in ('maven39', 'maven310') else name
-            artifacts = read_artifacts(root / 'metadata/artifacts' / f'{metadata_name}.psv')
+            rows = descriptor_rows(name)
         except (OSError, subprocess.CalledProcessError, ValueError):
-            artifacts = {}
-            platform = ''
+            rows = {}
         cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=delay_days)
         eligible = []
         for version in versions:
@@ -145,13 +153,9 @@ def target(name, delay_days=None):
                 eligible.append(version)
                 continue
             try:
-                rows = [row for (candidate, artifact), row in artifacts.items()
-                        if candidate == version and artifact.split('/')[1] == platform]
-                components = {row['artifact'].split('/')[0] for row in rows}
-                if not rows or '' not in components or (name == 'codex' and 'host' not in components):
-                    continue
-                stamps = [datetime.datetime.fromisoformat(row['discovered_at'].replace('Z', '+00:00')) for row in rows]
-                if all(stamp.tzinfo is not None and stamp <= cutoff for stamp in stamps):
+                stamps = [datetime.datetime.fromisoformat(row['discovered_at'].replace('Z', '+00:00'))
+                          for row in rows.get(version, [])]
+                if stamps and all(stamp.tzinfo is not None and stamp <= cutoff for stamp in stamps):
                     eligible.append(version)
             except (KeyError, TypeError, ValueError):
                 continue
@@ -215,10 +219,10 @@ elif command in ('update', 'discover'):
                 print('node24: configured NVM version must be repaired or upgraded first; skipped', file=sys.stderr)
                 failures = True
                 continue
-            script = root / 'install' / f'install-{name}.sh'
+            script = [str(root / 'lib/install-tool.sh'), name]
         else:
-            script = root / 'discover' / f'discover-{name}.sh'
-            if not script.is_file():
+            script = [str(root / 'lib/discover-tool.sh'), name]
+            if tools.load(name, root)['discover'] == 'none':
                 print(f'{name}: no internet updater available; skipped')
                 continue
         print(f'{name}: {"checking for releases" if command == "discover" else f"installing {known}"}...', flush=True)
@@ -226,7 +230,7 @@ elif command in ('update', 'discover'):
         env.pop('TOOLSHED_OVERRIDE_TOOL_VERSION', None)
         if command == 'update':
             env['TOOLSHED_OVERRIDE_TOOL_VERSION'] = known
-        result = subprocess.run([str(script)], env=env, text=True, stdout=subprocess.PIPE,
+        result = subprocess.run(script, env=env, text=True, stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE)
         if result.returncode:
             print(f'{name}: failed', file=sys.stderr)

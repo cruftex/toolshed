@@ -273,6 +273,19 @@ extract_zip_member() {
     _extract_output=$_extract_directory/binary
 }
 
+# Extract one tar member into a staged executable; return its path in OUTPUT_VARIABLE. Call directly.
+extract_tar_member() {
+    local _tar_archive=$1 _tar_member=$2 _tar_directory
+    local -n _tar_output=$3
+    _installer_require tar chmod
+    stage_directory _tar_directory
+    tar -xOzf "$_tar_archive" "$_tar_member" > "$_tar_directory/binary" ||
+        _installer_fail "Cannot extract $_tar_member from $_tar_archive"
+    [[ -s $_tar_directory/binary ]] || _installer_fail 'Extracted executable is empty.'
+    chmod 755 -- "$_tar_directory/binary"
+    _tar_output=$_tar_directory/binary
+}
+
 verify_version() {
     local actual
     actual=$("$1" --version) || _installer_fail "Cannot execute staged binary: $1"
@@ -350,116 +363,9 @@ java_is_installed() {
     [[ $output == "javac $expected" ]]
 }
 
-
-# Install a versioned, multi-file Maven distribution without replacing an existing one.
-install_maven_package() {
-    local tool=$1 version=$2 url=$3 checksum=$4 root=$5 command=$6 expected=$7
-    local destination="$TOOLSHED_OPT_DIR/$tool/$version" archive staging output checkdir
-    local -a args=(--version)
-    if [[ $tool == mvnd ]]; then
-        stage_directory checkdir
-        args=("-Dmvnd.daemonStorage=$checkdir" --version)
-    fi
-    if [[ ! -e $destination && ! -L $destination ]]; then
-        archive=$(cache_path "$url")
-        download_verified "$url" "$checksum" "$archive"
-        _installer_require tar mkdir mv
-        mkdir -p -- "$TOOLSHED_OPT_DIR/$tool"
-        stage_directory staging "$TOOLSHED_OPT_DIR/$tool"
-        tar -xzf "$archive" -C "$staging" || _installer_fail "Cannot extract $tool archive."
-        [[ -x $staging/$root/bin/$command ]] || _installer_fail "Missing $tool executable."
-        output=$("$staging/$root/bin/$command" "${args[@]}") || _installer_fail "Cannot run $tool."
-        if [[ $tool == mvnd ]]; then
-            "$staging/$root/bin/$command" "-Dmvnd.daemonStorage=$checkdir" --stop >/dev/null || _installer_fail 'Cannot stop test daemon.'
-        fi
-        [[ $output == *"$expected"* ]] || _installer_fail "Unexpected $tool version: $output"
-        [[ ! -e $destination && ! -L $destination ]] || _installer_fail "Destination appeared during staging: $destination"
-        mv -T -- "$staging/$root" "$destination"
-    else
-        [[ -x $destination/bin/$command ]] || _installer_fail "Incomplete $tool installation: $destination"
-        output=$("$destination/bin/$command" "${args[@]}") || _installer_fail "Cannot run installed $tool."
-        if [[ $tool == mvnd ]]; then
-            "$destination/bin/$command" "-Dmvnd.daemonStorage=$checkdir" --stop >/dev/null || _installer_fail 'Cannot stop test daemon.'
-        fi
-        [[ $output == *"$expected"* ]] || _installer_fail "Unexpected installed $tool version: $output"
-    fi
-    install_symlink "$destination/bin/$command" "$command"
-    printf '%s %s is installed in %s\n' "$tool" "$version" "$destination"
-}
-
-install_pinned_maven() {
-    local version=$1 platform checksum url
-    platform=$(platform_string)
-    load_archive_checksum maven "$version" "$platform" || _installer_fail "No pinned Maven archive for $version/$platform."
-    checksum=${archive_sha256[$version/$platform]}
-    url="https://archive.apache.org/dist/maven/maven-3/$version/binaries/apache-maven-$version-bin.tar.gz"
-    install_maven_package maven "$version" "$url" "$checksum" "apache-maven-$version" mvn "Apache Maven $version"
-}
-
-# Install a pinned release executable, extracting only its requested archive member.
-install_defined_release() {
-    local name=$1; shift
-    local version platform key release_repo release_tag release_asset release_member url digest artifact
-    local -A archive_sha256=() binary_sha256=()
-    source "$_installer_library_dir/../metadata/releases/$name.sh"
-    version=$(select_install_version "$name" "$@")
-    platform=$(platform_string)
-    key="$version/$platform"
-    release_asset=${release_asset//\{version\}/$version}
-    release_member=${release_member//\{version\}/$version}
-    if [[ $release_member ]]; then artifact="/$platform/archive/tar.gz"; else artifact="/$platform/binary"; fi
-    digest=$(python3 "$_installer_library_dir/artifact_metadata.py" checksum \
-        "$_installer_library_dir/../metadata/artifacts/$name.psv" "$version" "$artifact") ||
-        _installer_fail "No pinned $name checksum for $key."
-    archive_sha256[$key]=$digest
-    [[ $release_member ]] || binary_sha256[$key]=$digest
-    url="https://github.com/$release_repo/releases/download/$release_tag$version/$release_asset"
-    install_release_binary "$name" "$version" "$url" "$release_member" "${archive_sha256[$key]}"
-    printf '%s %s is installed in %s\n' "$name" "$version" "$TOOLSHED_BIN_DIR"
-}
-
-install_release_binary() {
-    local name=$1 version=$2 url=$3 member=$4 archive_digest=$5 binary_digest
-    local archive staging binary output
-    if [[ ! $member ]]; then
-        binary_is_installed "$name" "$archive_digest" && return
-        warn_if_modified "$name" "$archive_digest"
-    fi
-    archive=$(cache_path "$url")
-    download_verified "$url" "$archive_digest" "$archive"
-    if [[ $member ]]; then
-        _installer_require tar chmod
-        stage_directory staging
-        tar -xOzf "$archive" "$member" > "$staging/binary" || _installer_fail "Cannot extract $name."
-        [[ -s $staging/binary ]] || _installer_fail "Empty $name executable."
-        chmod 755 "$staging/binary"
-        binary=$staging/binary
-    else
-        stage_executable "$archive" binary
-    fi
-    if [[ $member ]]; then
-        binary_digest=$(sha256sum < "$binary"); binary_digest=${binary_digest%% *}
-        binary_is_installed "$name" "$binary_digest" && return
-        warn_if_modified "$name" "$binary_digest"
-    else
-        verify_sha256 "$binary" "$archive_digest"
-        binary_digest=$archive_digest
-    fi
-    validate_tool_binary "$binary" "$version"
-    install_binary "$binary" "$name"
-}
-
-validate_release_version() {
-    local binary=$1 version=$2 argument=$3 output
-    output=$("$binary" "$argument" 2>&1) || _installer_fail "Cannot run $name."
-    [[ $output == *"$version"* ]] || _installer_fail "Unexpected $name version: $output"
-}
-
-verify_go_toolchain() {
-    local directory=$1 version=$2 output
-    [[ -x $directory/bin/go && -x $directory/bin/gofmt ]] || _installer_fail "Incomplete Go installation: $directory"
-    output=$(GOTOOLCHAIN=local GOROOT="$directory" "$directory/bin/go" version) || _installer_fail 'Cannot run Go.'
-    [[ $output == "go version go$version "* ]] || _installer_fail "Unexpected Go version: $output"
-    output=$(printf 'package p\n' | "$directory/bin/gofmt") || _installer_fail 'Cannot run gofmt.'
-    [[ $output == 'package p' ]] || _installer_fail 'Unexpected gofmt output.'
+maven_is_installed() {
+    local home=$1 expected=$2 output
+    [[ -x $home/bin/mvn ]] || return 1
+    output=$("$home/bin/mvn" --version) || return 1
+    [[ $output == *"Apache Maven $expected"* ]]
 }

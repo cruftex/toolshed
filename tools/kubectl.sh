@@ -1,0 +1,9 @@
+kind=bin
+repo=kubernetes/kubernetes
+tag=v
+url='https://dl.k8s.io/release/v{version}/bin/linux/amd64/kubectl'
+archive=binary
+checksum=suffix:.sha256
+version_args='version --client'
+version_match='Client Version: v{version}*'
+license=apache-2.0

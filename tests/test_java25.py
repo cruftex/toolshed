@@ -18,7 +18,7 @@ class JavaInstallerTests(unittest.TestCase):
         self.addCleanup(tmp.cleanup)
         self.root = Path(tmp.name)
         self.repo = self.root / 'repository with spaces'
-        for name in ('install', 'lib', 'metadata', 'pins', 'profile.d', 'discover'):
+        for name in ('tools', 'lib', 'metadata', 'pins', 'profile.d'):
             shutil.copytree(ROOT / name, self.repo / name)
         self.cache, self.bin, self.opt = (self.root / name for name in ('cache', 'bin', 'opt'))
         (self.repo / 'env').write_text('\n'.join(f'{key}={shlex.quote(str(value))}' for key, value in [('TOOLSHED_DOWNLOAD_DIR', self.cache), ('TOOLSHED_BIN_DIR', self.bin), ('TOOLSHED_OPT_DIR', self.opt)]) + '\n')
@@ -51,18 +51,18 @@ esac
         curl.chmod(0o755)
         self.env = dict(os.environ, PATH=f'{commands}:{os.environ["PATH"]}', TEST_ARCHIVE=str(self.archive), TEST_DIGEST=digest)
 
-    def run_script(self, name):
-        return subprocess.run([self.repo / name], cwd=self.root, env=self.env, capture_output=True, text=True)
+    def run_tool(self, action, tool):
+        return subprocess.run([self.repo / f'lib/{action}-tool.sh', tool], cwd=self.root, env=self.env, capture_output=True, text=True)
 
     def test_install_repeat_and_repair_entry_points(self):
-        result = self.run_script('install/install-java25.sh')
+        result = self.run_tool('install', 'java25')
         self.assertEqual(result.returncode, 0, result.stderr)
         java = self.opt / 'java25/25.0.5/bin/java'
         self.assertTrue(java.is_file())
         self.assertEqual((self.bin / 'java').resolve(), java)
         self.archive.unlink()
         (self.bin / 'java').unlink()
-        result = self.run_script('install/install-java25.sh')
+        result = self.run_tool('install', 'java25')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual((self.bin / 'java').resolve(), java)
 
@@ -70,13 +70,13 @@ esac
         self.bin.mkdir()
         (self.bin / 'java').write_text('existing')
         self.archive.write_bytes(b'corrupt')
-        result = self.run_script('install/install-java25.sh')
+        result = self.run_tool('install', 'java25')
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual((self.bin / 'java').read_text(), 'existing')
         self.assertFalse((self.opt / 'java25/25.0.5').exists())
 
     def test_update_uses_adoptium_metadata(self):
-        result = self.run_script('discover/discover-java25.sh')
+        result = self.run_tool('discover', 'java25')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual((self.repo / 'pins/java25').read_text(), '25.0.5\n')
         self.assertFalse((self.bin / 'javac').exists())
@@ -87,7 +87,7 @@ esac
 
     def test_reject_unpinned_version(self):
         (self.repo / 'pins/java25').write_text('25.0.6\n')
-        result = self.run_script('install/install-java25.sh')
+        result = self.run_tool('install', 'java25')
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn('No pinned Java checksums', result.stderr)
+        self.assertIn('No pinned', result.stderr)
         self.assertFalse(self.bin.exists())

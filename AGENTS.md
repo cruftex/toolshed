@@ -1,7 +1,7 @@
 # Reproducible development environment
 
 Every installer must reproduce a specific tool version. Pin the version, use a version-specific download URL, and embed the
-expected SHA-256 in the installer.
+expected SHA-256 in `metadata/artifacts/<tool>.psv`.
 Do not discover `latest` at installer runtime, run unpinned remote installation
 scripts, or upgrade tools automatically. Explicit `TOOLSHED_OVERRIDE_TOOL_VERSION` selections must
 use repository-recorded verification metadata, or Claude's signed manifest.
@@ -22,7 +22,7 @@ use repository-recorded verification metadata, or Claude's signed manifest.
   reverify cached signatures and executable checksums before reuse. Keep Claude's
   built-in updater disabled so upgrades happen through the verified installer.
 
-- When adding or updating an installer, actually download each supported archive
+- When adding or updating a tool, actually download each supported archive
   and calculate its SHA-256 locally. Compare it with the publisher's checksum when
   available. Record the version, URL, digest, and smoke-test result in the change.
 - Verify SHA-256 before extraction or execution, including cached downloads.
@@ -50,14 +50,26 @@ use repository-recorded verification metadata, or Claude's signed manifest.
   once as `metadata/license/<sha256>.txt`, with its short name (lowercase SPDX-style, for example `apache-2.0`,
   `gpl-2.0-classpath`, `oracle-nftc`) in `<sha256>.name.txt`. A changed license text for a recorded version fails discovery.
 
-## Installer conventions
+## Tool descriptors
 
-- Put executable Bash installers in `install/`, named `install-<tool>.sh`, with
-  `set -euo pipefail`. Always use the `.sh` extension for installer scripts.
-- Keep installers roughly 15–20 readable lines. Put reusable mechanics in
-  `lib/install.sh`; keep tool-specific pins and installation steps in the installer.
-- Source the library relative to the installer, not the current working directory.
-  The library loads `env`, owns temporary-file cleanup and signal traps, and
+- Each tool is described by one file, `tools/<tool>.sh`; there are no per-tool install or
+  discover scripts. Install with `shed install <tool>` (or `lib/install-tool.sh <tool>`),
+  discover with `shed discover <tool>` (or `lib/discover-tool.sh <tool>`).
+- Descriptors hold top-level, single-line `key=value` settings (one shell word, quoted as
+  needed) that both Bash and `lib/tools.py` read, plus optional hook functions. `kind` says
+  where the tool goes: `bin` (one executable into `TOOLSHED_BIN_DIR`), `opt` (multi-file
+  package in `$TOOLSHED_OPT_DIR/<tool>/<version>/` with linked entry points), or `scripted`
+  (`tool_install`/`tool_discover` hooks do the work). Other keys: `repo`, `tag`, `url`,
+  `asset`, `member`, `archive`, `root`, `home`, `links`, `executable`, `version_args`,
+  `version_env`, `version_match`, `checksum`, `license`, `license_file`, `table`,
+  `components`, `platforms`, `platform_names`, `version_prefix`, `detect`, `discover`,
+  `strategy`. Hooks: `tool_validate`, `tool_prepare`, `tool_vars`, `tool_before_install`,
+  `tool_latest`, `tool_license`, `tool_after_discovery`, `tool_install`, `tool_discover`.
+- Keep descriptors small and declarative; put reusable mechanics in `lib/install.sh`
+  (primitives), `lib/tool.sh` (descriptor loading and the generic `bin`/`opt` flows) and
+  `lib/update.sh` (discovery). Prefer a new descriptor setting over a hook when several
+  tools need the same behaviour.
+- The library loads `env`, owns temporary-file cleanup and signal traps, and
   provides platform, download, extraction, version, and installation helpers.
 - Build GitHub asset names using `platform_string` (or run `lib/platform.sh`),
   which maps the host to Bun-style suffixes such as `linux-x64` and
@@ -79,17 +91,17 @@ use repository-recorded verification metadata, or Claude's signed manifest.
 
 ## Pinned tools
 
-| Tool | Version | Platform | Installer |
+| Tool | Version | Platform | Descriptor |
 | --- | --- | --- | --- |
-| Bun | 1.4.4 | Linux x86_64, glibc | `install/install-bun.sh` |
-| Eclipse Temurin Java | 25.0.5+8 | Linux x86_64, glibc | `install/install-java25.sh` |
-| Oracle Java | 25.0.5 | Linux x86_64, glibc | `install/install-oracle-java25.sh` |
+| Bun | 1.4.4 | Linux x86_64, glibc | `tools/bun.sh` |
+| Eclipse Temurin Java | 25.0.5+8 | Linux x86_64, glibc | `tools/java25.sh` |
+| Oracle Java | 25.0.5 | Linux x86_64, glibc | `tools/oracle-java25.sh` |
 
 Bun's `bunx` entry point is a relative symlink to the `bun` executable.
 
 ## Validation
 
-Run `bash -n lib/install.sh lib/platform.sh install/install-bun.sh` and
+Run `bash -n lib/*.sh tools/*.sh bin/shed` and
 `python3 -m unittest discover -s tests -v`. Test downloads, cache reuse, corruption,
 interruption cleanup, paths containing spaces, execution from another directory,
 and preservation of existing executables on failure. Smoke-test real downloads
