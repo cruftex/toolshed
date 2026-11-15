@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-unset TOOLSHED_OVERRIDE_TOOL_VERSION
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-source "$root/lib/install.sh"
 source "$root/lib/update.sh"
 [[ $(platform_string) == linux-x64 ]] || _installer_fail 'Java update supports Linux x86_64 only.'
 _installer_require python3 sha256sum tar
@@ -26,11 +24,7 @@ archive=$(cache_path "$url")
 download_verified "$url" "$checksum" "$archive"
 tar -xzf "$archive" -C "$staging" || _installer_fail 'Cannot extract Java archive.'
 java_is_installed "$staging/jdk-$version" "$version" || _installer_fail "Java $version validation failed."
-source "$root/metadata/java25.sh"
-key="archive/$version/linux-x64"
-[[ ! ${checksums[$key]+present} || ${checksums[$key]} == "$checksum" ]] || _installer_fail "Conflicting Java checksum: $version"
-if [[ ! ${checksums[$key]+present} ]]; then
-    printf '\nchecksums[%s]=%s\n' "$key" "$checksum" >> "$root/metadata/java25.sh"
-fi
+key="$version/linux-x64"
+record_checksums java25 "$key" "$checksum"
 record_provenance "java25" "$version/linux-x64" "$url.sha256" "$staging/checksum.peer"
 printf "%s\n" "$version"

@@ -45,8 +45,8 @@ class NvmUpgradeTests(unittest.TestCase):
                 item.mode = 0o755
                 tar.addfile(item, io.BytesIO(data))
         digest = hashlib.sha256(self.cache.read_bytes()).hexdigest()
-        metadata = self.repo / 'metadata/nvm.sh'
-        metadata.write_text(metadata.read_text().replace('6601b5bbd0af01a2faf17267e73e02b0e44f3b4fcdb85cf8f4602c6a0791909b', digest))
+        artifact_table = self.repo / 'metadata/artifacts/nvm.psv'
+        artifact_table.write_text(artifact_table.read_text().replace('6601b5bbd0af01a2faf17267e73e02b0e44f3b4fcdb85cf8f4602c6a0791909b', digest))
         (self.repo / 'env').write_text('\n'.join(f'{key}={shlex.quote(str(value))}' for key, value in (
             ('TOOLSHED_NVM_DIR', self.nvm), ('TOOLSHED_NVM_GIT_DIR', self.git_cache), ('TOOLSHED_DOWNLOAD_DIR', self.root / 'cache'),
             ('TOOLSHED_OPT_DIR', self.root / 'opt'), ('TOOLSHED_BIN_DIR', self.root / 'bin'))) + '\n')
@@ -63,6 +63,8 @@ class NvmUpgradeTests(unittest.TestCase):
     def test_cached_upgrade_preserves_user_data_and_backups(self):
         result = self.run_installer()
         self.assertEqual(result.returncode, 0, result.stderr)
+        migrated = self.root / 'cache/linux-x64/nvm/0.41.0/nvm-0.41.0.tar.gz'
+        self.assertEqual(migrated.read_bytes(), self.cache.read_bytes())
         self.assertIn('0.41.0', (self.nvm / 'nvm.sh').read_text())
         self.assertEqual((self.nvm / 'versions/node/v24.0.0/bin/node').read_text(), 'node data')
         self.assertEqual((self.nvm / 'alias/default').read_text(), '24')
@@ -81,6 +83,13 @@ class NvmUpgradeTests(unittest.TestCase):
         self.assertIn('0.39.3', (self.nvm / 'nvm.sh').read_text())
         self.assertEqual((self.nvm / 'nvm-exec').read_text(), 'old executable')
         self.assertFalse(list(self.nvm.glob('.toolshed-nvm-backup-*')))
+
+    def test_fresh_install_from_legacy_cache(self):
+        shutil.rmtree(self.nvm)
+        result = self.run_installer()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('0.41.0', (self.nvm / 'nvm.sh').read_text())
+        self.assertTrue((self.root / 'cache/linux-x64/nvm/0.41.0/nvm-0.41.0.tar.gz').is_file())
 
     def test_replacement_error_restores_old_files(self):
         source = self.root / 'new files'

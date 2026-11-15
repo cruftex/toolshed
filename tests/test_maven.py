@@ -55,7 +55,7 @@ esac
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual((self.repo / 'pins/maven39').read_text(), '3.9.16\n')
         self.assertEqual((self.repo / 'pins/maven310').read_text(), '3.10.0\n')
-        self.assertIn(self.digest, (self.repo / 'metadata/maven.sh').read_text())
+        self.assertIn(self.digest, (self.repo / 'metadata/artifacts/maven.psv').read_text())
         self.assertFalse(self.bin.exists())
         self.env['TOOLSHED_OVERRIDE_TOOL_VERSION'] = '3.9.17'
         result = self.run_script('install/install-maven39.sh')

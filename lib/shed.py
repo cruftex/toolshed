@@ -4,12 +4,12 @@ import os
 import hashlib
 import argparse
 import datetime
-import json
 from pathlib import Path
 import re
 import subprocess
 import sys
 import tempfile
+from artifact_metadata import read_artifacts
 
 root = Path(__file__).resolve().parent.parent
 bin_dir, opt_dir, nvm_dir = map(Path, sys.argv[2:5])
@@ -58,15 +58,11 @@ def installed_tools():
         try:
             with envtest.open('rb') as stream:
                 digest = hashlib.file_digest(stream, 'sha256').hexdigest()
-            script = """source "$1"; for key in "${!checksums[@]}"; do
-                [[ $key == binary/*/linux-x64 ]] && printf '%s %s\n' "$key" "${checksums[$key]}"
-            done; true"""
-            output = subprocess.run(['bash', '-c', script, '_', str(root / 'metadata/setup-envtest.sh')],
-                                    capture_output=True, text=True, check=True).stdout
-            matches = [line.split()[0].split('/')[1] for line in output.splitlines()
-                       if len(line.split()) == 2 and line.split()[1] == digest]
+            records = read_artifacts(root / 'metadata/artifacts/setup-envtest.psv')
+            matches = [version for (version, artifact), row in records.items()
+                       if artifact == '/linux-x64/binary' and row['sha256'] == digest]
             result['setup-envtest'] = max(matches, key=version_tuple) if matches else '?'
-        except (OSError, subprocess.CalledProcessError):
+        except (OSError, ValueError):
             result['setup-envtest'] = '?'
     mvnd = bin_dir / 'mvnd'
     if mvnd.is_file() and os.access(mvnd, os.X_OK):
@@ -109,44 +105,25 @@ def recorded_versions(name):
         versions = registry.read_text().splitlines() if registry.is_file() else []
         return [v for v in set(versions + [pin]) if re.fullmatch(r'\d+\.\d+\.\d+', v)]
     metadata_name = 'maven' if name in ('maven39', 'maven310') else name
-    metadata = root / 'metadata' / f'{metadata_name}.sh'
-    if not metadata.is_file():
-        return [pin]
     try:
         platform = subprocess.run([str(root / 'lib/platform.sh')], capture_output=True,
                                   text=True, check=True).stdout.strip()
-        if name == 'vegeta':
-            platform = platform.replace('linux-', 'linux_').replace('darwin-', 'darwin_')
-            platform = platform.replace('x64', 'amd64').replace('aarch64', 'arm64')
-        def keys(path):
-            script = '''declare -A checksums=() archive_sha256=(); source "$1"
-for key in "${!checksums[@]}"; do printf '%s\\n' "$key"; done
-for key in "${!archive_sha256[@]}"; do printf 'archive/%s\\n' "$key"; done'''
-            output = subprocess.run(['bash', '-c', script, '_', str(path)],
-                                    capture_output=True, text=True, check=True).stdout
-            return set(output.splitlines())
-        entries = keys(metadata)
-        host_entries = keys(root / 'metadata/codex-code-mode-host.sh') if name == 'codex' else None
-        versions = []
-        for key in entries:
-            parts = key.split('/')
-            if len(parts) != 3 or parts[0] != 'archive' or parts[2] != platform:
-                continue
-            version = parts[1]
-            if not re.fullmatch(r'\d+\.\d+\.\d+', version):
+        records = read_artifacts(root / 'metadata/artifacts' / f'{metadata_name}.psv')
+        grouped = {}
+        for (version, artifact), row in records.items():
+            parts = artifact.split('/')
+            if parts[1] != platform or not row['sha256']:
                 continue
             if name == 'maven39' and not version.startswith('3.9.'):
                 continue
             if name == 'maven310' and not version.startswith('3.10.'):
                 continue
-            if name in ('bun', 'vegeta', 'codex', 'helm', 'kubectl', 'kind', 'clusterctl', 'cloud-provider-kind', 'kubebuilder', 'controller-gen', 'setup-envtest', 'golangci-lint', 'kustomize', 'crane', 'cosign', 'trivy', 'yq') and f'binary/{version}/{platform}' not in entries:
-                continue
-            if host_entries is not None and not {f'archive/{version}/{platform}', f'binary/{version}/{platform}'} <= host_entries:
-                continue
-            versions.append(version)
-        return versions
-    except (OSError, subprocess.CalledProcessError):
+            grouped.setdefault(version, set()).add(parts[0])
+        return [version for version, components in grouped.items()
+                if '' in components and (name != 'codex' or 'host' in components)]
+    except (OSError, subprocess.CalledProcessError, ValueError):
         return []
+
 
 
 def target(name, delay_days=None):
@@ -156,13 +133,10 @@ def target(name, delay_days=None):
         try:
             platform = subprocess.run([str(root / 'lib/platform.sh')], capture_output=True,
                                       text=True, check=True).stdout.strip()
-            if name == 'vegeta':
-                platform = platform.replace('linux-', 'linux_').replace('darwin-', 'darwin_').replace('x64', 'amd64').replace('aarch64', 'arm64')
-            if name == 'claude':
-                platform = platform.replace('aarch64', 'arm64')
-            provenance = json.loads((root / 'metadata/provenance' / f'{name}.json').read_text())
+            metadata_name = 'maven' if name in ('maven39', 'maven310') else name
+            artifacts = read_artifacts(root / 'metadata/artifacts' / f'{metadata_name}.psv')
         except (OSError, subprocess.CalledProcessError, ValueError):
-            provenance = {}
+            artifacts = {}
             platform = ''
         cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=delay_days)
         eligible = []
@@ -171,8 +145,13 @@ def target(name, delay_days=None):
                 eligible.append(version)
                 continue
             try:
-                stamp = datetime.datetime.fromisoformat(provenance[f'{version}/{platform}']['discovered_at'].replace('Z', '+00:00'))
-                if stamp.tzinfo is not None and stamp <= cutoff:
+                rows = [row for (candidate, artifact), row in artifacts.items()
+                        if candidate == version and artifact.split('/')[1] == platform]
+                components = {row['artifact'].split('/')[0] for row in rows}
+                if not rows or '' not in components or (name == 'codex' and 'host' not in components):
+                    continue
+                stamps = [datetime.datetime.fromisoformat(row['discovered_at'].replace('Z', '+00:00')) for row in rows]
+                if all(stamp.tzinfo is not None and stamp <= cutoff for stamp in stamps):
                     eligible.append(version)
             except (KeyError, TypeError, ValueError):
                 continue
@@ -255,6 +234,8 @@ elif command in ('update', 'discover'):
                 print(result.stderr.strip(), file=sys.stderr)
             failures = True
             continue
+        if result.stderr.strip():
+            print(result.stderr.strip(), file=sys.stderr)
         if command == 'update':
             try:
                 move_pin(name, known)

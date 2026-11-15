@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-unset TOOLSHED_OVERRIDE_TOOL_VERSION
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-source "$root/lib/install.sh"
 source "$root/lib/update.sh"
 base_url=https://downloads.claude.ai/claude-code-releases
 platform=$(platform_string)

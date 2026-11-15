@@ -4,9 +4,8 @@ source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/lib/install.sh"
 
 version=$(select_install_version java25 "$@")
 platform=$(platform_string)
-source "$_installer_library_dir/../metadata/java25.sh"
-checksum=${checksums[archive/$version/$platform]:-}
-[[ $checksum ]] || _installer_fail "No pinned Java checksums for $version/$platform."
+load_archive_checksum java25 "$version" "$platform" || _installer_fail "No pinned Java checksums for $version/$platform."
+checksum=${archive_sha256[$version/$platform]}
 jdk_home="$TOOLSHED_OPT_DIR/java25/$version"
 if ! java_is_installed "$jdk_home" "$version"; then
     [[ ! -e $jdk_home && ! -L $jdk_home ]] || _installer_fail "Incomplete Java installation: $jdk_home"

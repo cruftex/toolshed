@@ -51,7 +51,7 @@ if [[ $url == *'?'* ]]; then cp "$FIXTURE/release.json" "$out"; else cp "$FIXTUR
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(result.stdout.strip(), '1.28.1')
             self.assertEqual((repo / 'pins/go').read_text(), pin)
-            self.assertEqual((repo / 'metadata/go.sh').read_text().count('archive/1.28.1/linux-x64'), 1)
+            self.assertEqual((repo / 'metadata/artifacts/go.psv').read_text().count('1.28.1|/linux-x64/archive/tar.gz|'), 1)
             env['TOOLSHED_OVERRIDE_TOOL_VERSION'] = '1.28.1'
             curl.rename(commands / 'disabled-curl')
             result = subprocess.run([repo / 'install/install-go.sh'], cwd=root, env=env, capture_output=True, text=True)
@@ -63,9 +63,9 @@ if [[ $url == *'?'* ]]; then cp "$FIXTURE/release.json" "$out"; else cp "$FIXTUR
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertTrue((root / 'bin/gofmt').is_symlink())
             original = (root / 'bin/go').readlink()
-            with (repo / 'metadata/go.sh').open('a') as metadata:
-                metadata.write(f'\nchecksums[archive/1.29.0/linux-x64]={digest}\n')
-            (root / 'cache/go.dev/dl/go1.29.0.linux-amd64.tar.gz').write_bytes(b'bad')
+            with (repo / 'metadata/artifacts/go.psv').open('a') as metadata:
+                metadata.write(f'1.29.0|/linux-x64/archive/tar.gz|{digest}|\n')
+            (root / 'cache/linux-x64/go.dev/dl/go1.29.0.linux-amd64.tar.gz').write_bytes(b'bad')
             env['TOOLSHED_OVERRIDE_TOOL_VERSION'] = '1.29.0'
             result = subprocess.run([repo / 'install/install-go.sh'], cwd=root, env=env, capture_output=True, text=True)
             self.assertNotEqual(result.returncode, 0)

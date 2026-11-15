@@ -40,13 +40,12 @@ class ToolshedCommandTests(unittest.TestCase):
             archive.parent.mkdir(parents=True)
             with zipfile.ZipFile(archive, 'w') as z:
                 z.writestr('bun-linux-x64/bun', binary)
-            with (repo / 'metadata/bun.sh').open('a') as metadata:
-                metadata.write(f'\nchecksums[archive/9.9.9/linux-x64]={hashlib.sha256(archive.read_bytes()).hexdigest()}\n')
-                metadata.write(f'checksums[binary/9.9.9/linux-x64]={hashlib.sha256(binary).hexdigest()}\n')
-                metadata.write('checksums[archive/1.0.0/linux-x64]=test\nchecksums[binary/1.0.0/linux-x64]=test\n')
             provenance = repo / 'metadata/provenance/bun.json'
             provenance.parent.mkdir(exist_ok=True)
             provenance.write_text(json.dumps({'9.9.9/linux-x64': {'discovered_at': '2999-01-01T00:00:00Z'}}))
+            artifacts = repo / 'metadata/artifacts/bun.psv'
+            artifacts.parent.mkdir(exist_ok=True)
+            artifacts.write_text('version|artifact|sha256|discovered_at\n1.0.0|/linux-x64/archive/zip|' + 'b' * 64 + '|\n9.9.9|/linux-x64/archive/zip|' + hashlib.sha256(archive.read_bytes()).hexdigest() + '|2999-01-01T00:00:00Z\n')
             env = dict(os.environ, PATH=f'{commands}:{os.environ["PATH"]}')
             result = subprocess.run([repo / 'bin/shed', 'update'], cwd=root, env=env,
                                     capture_output=True, text=True)
@@ -60,6 +59,8 @@ class ToolshedCommandTests(unittest.TestCase):
             old.write_text('#!/bin/sh\necho 1.0.0\n')
             (repo / 'pins/bun').write_text('1.0.0\n')
             provenance.write_text(json.dumps({'9.9.9/linux-x64': {'discovered_at': '2000-01-01T00:00:00Z'}}))
+            artifacts.write_text('version|artifact|sha256|discovered_at\n1.0.0|/linux-x64/archive/zip|' + 'b' * 64 + '|\n9.9.9|/linux-x64/archive/zip|' + hashlib.sha256(archive.read_bytes()).hexdigest() + '|2000-01-01T00:00:00Z\n')
+            provenance.unlink()
             result = subprocess.run([repo / 'bin/shed', 'update'], cwd=root, env=env,
                                     capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
@@ -98,12 +99,12 @@ class ToolshedCommandTests(unittest.TestCase):
                     ('TOOLSHED_BIN_DIR', 'local bin'), ('TOOLSHED_OPT_DIR', 'opt'),
                     ('TOOLSHED_NVM_DIR', 'nvm'))) + '\n')
             (repo / 'pins/bun').write_text('2.0.0\n')
-            with (repo / 'metadata/bun.sh').open('a') as metadata:
-                metadata.write('\nchecksums[archive/2.0.0/linux-x64]=test\nchecksums[binary/2.0.0/linux-x64]=test\n')
-                metadata.write('checksums[archive/3.0.0/linux-x64]=test\nchecksums[binary/3.0.0/linux-x64]=test\n')
             provenance = repo / 'metadata/provenance/bun.json'
             provenance.parent.mkdir(exist_ok=True)
             provenance.write_text(json.dumps({'3.0.0/linux-x64': {'discovered_at': '2000-01-01T00:00:00Z'}}))
+            artifacts = repo / 'metadata/artifacts/bun.psv'
+            artifacts.parent.mkdir(exist_ok=True)
+            artifacts.write_text('version|artifact|sha256|discovered_at\n2.0.0|/linux-x64/archive/zip|' + 'b' * 64 + '|\n3.0.0|/linux-x64/archive/zip|' + 'a' * 64 + '|2000-01-01T00:00:00Z\n')
             bun = root / 'local bin/bun'
             bun.write_text('#!/bin/sh\necho 1.0.0\n')
             bun.chmod(0o755)
@@ -138,6 +139,12 @@ class ToolshedCommandTests(unittest.TestCase):
             self.assertEqual((repo / 'pins/bun').read_text(), '3.0.0\n')
             self.assertIn('available and cached', result.stdout)
             self.assertNotIn('running discover-', result.stdout)
+            (repo / 'pins/bun').write_text('2.0.0\n')
+            installer = repo / 'install/install-bun.sh'
+            installer.write_text('#!/bin/sh\necho "WARNING: installed bun differs" >&2\n')
+            result = subprocess.run([shed, 'update'], cwd=root, env=env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('WARNING: installed bun differs', result.stderr)
             (repo / 'pins/bun').write_text('2.0.0\n')
             failing = repo / 'install/install-bun.sh'
             failing.write_text('#!/bin/sh\necho "install failed" >&2\nexit 1\n')

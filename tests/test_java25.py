@@ -30,8 +30,8 @@ class JavaInstallerTests(unittest.TestCase):
                 info.size = len(content)
                 tar.addfile(info, io.BytesIO(content))
         digest = hashlib.sha256(self.archive.read_bytes()).hexdigest()
-        metadata = self.repo / 'metadata/java25.sh'
-        metadata.write_text(metadata.read_text().replace('8748e3837bbceabfa17548564b6d814d123bd820e947e30dff885202b6f24f2c', digest))
+        artifact_table = self.repo / 'metadata/artifacts/java25.psv'
+        artifact_table.write_text(artifact_table.read_text().replace('8748e3837bbceabfa17548564b6d814d123bd820e947e30dff885202b6f24f2c', digest))
         commands = self.root / 'commands'
         commands.mkdir()
         curl = commands / 'curl'

@@ -107,9 +107,15 @@ Successful discovery records the first verification time, checksum source URL,
 effective URL, and connected peer IP in `metadata/provenance/`, per version and
 platform. The IP is the network peer reported by curl; when a proxy is used it
 may identify the proxy rather than the publisher. Missing values are recorded as
-null. Existing entries without provenance have unknown discovery times and are
+null. Update eligibility reads discovery times from `metadata/artifacts/` rather
+than provenance. Existing entries without a recorded time are
 not eligible for delayed updates until rediscovered; `--delay-days 0` permits
 them immediately. Tools without discovery scripts retain their existing pins.
+When a verified rediscovery fills a missing peer address or effective URL, its
+observation time is recorded separately; it does not change an existing discovery time.
+Backfilled entries marked `timestamp_source: cache_mtime` use the verified local
+cache file's modification time as an approximation of discovery time; their
+checksum-source URL and peer remain unknown until observed during rediscovery.
 
 Only tools found in Toolshed’s configured directories are considered. Node
 status lists installed Node 24 versions and compares the newest one. NVM updates
@@ -124,6 +130,18 @@ Edit `env` to configure the download cache (default
 `~/.cache/toolshed/downloads`), executable directory (`~/.local/bin`), package
 directory (`~/opt`), NVM directory, NVM Git cache, and Claude settings file. Values in `env`
 are assigned directly and do not inherit exported overrides.
+
+Release metadata in `metadata/artifacts/` uses pipe-separated
+`version|artifact|sha256|discovered_at` rows. Artifact IDs contain the optional
+component name, target platform, and source type, such as `/linux-x64/binary`
+or `host/linux-x64/archive/tar.gz`. An empty SHA-256 is used for Claude, whose
+versioned manifest is authenticated instead. Archive-backed single-executable
+installs verify the archive and compare its extracted bytes on repeat installs.
+
+Downloads are cached under `TOOLSHED_DOWNLOAD_DIR/<platform>/`. Existing
+unpartitioned downloads are verified and copied into the platform cache on use;
+the originals are left in place. NVM's prepared Git archive follows the same
+layout. Normal installs remain offline when the required verified cache exists.
 
 Scripts in `discover/` discover and cache verified releases without installing
 them. Normal installers use the repository’s pins unless a version is selected.

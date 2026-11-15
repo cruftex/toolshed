@@ -3,9 +3,8 @@ set -euo pipefail
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/lib/install.sh"
 version=$(select_install_version go "$@")
 platform=$(platform_string)
-source "$_installer_library_dir/../metadata/go.sh"
-checksum=${checksums[archive/$version/$platform]:-}
-[[ $checksum ]] || _installer_fail "No pinned Go archive for $version/$platform."
+load_archive_checksum go "$version" "$platform" || _installer_fail "No pinned Go archive for $version/$platform."
+checksum=${archive_sha256[$version/$platform]}
 go_home="$TOOLSHED_OPT_DIR/go/$version"
 if [[ ! -e $go_home && ! -L $go_home ]]; then
     url="https://go.dev/dl/go${version}.linux-amd64.tar.gz"

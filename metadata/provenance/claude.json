@@ -1,0 +1,10 @@
+{
+  "2.1.325/linux-x64": {
+    "cache_path": "downloads.claude.ai/claude-code-releases/2.1.325/linux-x64/claude",
+    "checksum_url": null,
+    "discovered_at": "2026-11-14T04:44:41Z",
+    "effective_url": null,
+    "peer_ip": null,
+    "timestamp_source": "cache_mtime"
+  }
+}

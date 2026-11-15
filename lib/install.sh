@@ -76,13 +76,17 @@ select_install_version() {
     fi
 }
 
-load_binary_checksums() {
-    local tool=$1 key=$2
-    local -A checksums=()
-    source "$_installer_library_dir/../metadata/$tool.sh"
-    declare -gA archive_sha256=() binary_sha256=()
-    archive_sha256[$key]=${checksums[archive/$key]:-}
-    binary_sha256[$key]=${checksums[binary/$key]:-}
+artifact_checksum() {
+    local tool=$1 version=$2 artifact=$3
+    python3 "$_installer_library_dir/artifact_metadata.py" checksum \
+        "$_installer_library_dir/../metadata/artifacts/$tool.psv" "$version" "$artifact"
+}
+
+load_archive_checksum() {
+    local tool=$1 version=$2 platform=$3 digest
+    digest=$(artifact_checksum "$tool" "$version" "/$platform/archive/tar.gz") || return 1
+    declare -gA archive_sha256=()
+    archive_sha256[$version/$platform]=$digest
 }
 
 # Check bytes and executable permission without executing an untrusted local file.
@@ -92,17 +96,39 @@ binary_is_installed() {
         _installer_check_sha256 "$TOOLSHED_BIN_DIR/$1" "$2"
 }
 
+warn_if_modified() {
+    local name=$1 expected=$2 path="$TOOLSHED_BIN_DIR/$1"
+    if [[ -f $path ]] && ! _installer_check_sha256 "$path" "$expected"; then
+        printf 'WARNING: installed %s differs from the verified executable.\n' "$name" >&2
+    fi
+}
+
 # Preserve the HTTPS host and path as cache directories, rejecting ambiguous paths.
 cache_path() {
-    local path=${1#https://}
+    local path=${1#https://} target=${2:-}
     [[ $1 == https://* && $path =~ ^[a-zA-Z0-9._~-]+(/[a-zA-Z0-9._~-]+)+$ && /$path/ != */../* && /$path/ != */./* ]] ||
         _installer_fail "Unsupported cache URL: $1"
-    printf '%s/%s\n' "$TOOLSHED_DOWNLOAD_DIR" "$path"
+    [[ $target ]] || target=$(platform_string)
+    [[ $target =~ ^(linux|darwin)-(x64|aarch64)$ ]] || _installer_fail "Unsupported cache platform: $target"
+    printf '%s/%s/%s\n' "$TOOLSHED_DOWNLOAD_DIR" "$target" "$path"
 }
 
 # DESTINATION is the version-specific cache path. Never trust an unchecked cache.
+migrate_verified_cache() {
+    local legacy=$1 destination=$2 expected=$3 temporary
+    [[ -e $legacy || -L $legacy ]] || return 1
+    [[ -f $legacy ]] || _installer_fail "Not a regular file: $legacy"
+    verify_sha256 "$legacy" "$expected"
+    mkdir -p -- "$(dirname -- "$destination")" || _installer_fail 'Cannot create cache directory.'
+    stage_directory temporary "$(dirname -- "$destination")" || _installer_fail 'Cannot stage cached archive.'
+    cp -- "$legacy" "$temporary/archive" || _installer_fail 'Cannot copy cached archive.'
+    verify_sha256 "$temporary/archive" "$expected"
+    [[ ! -e $destination && ! -L $destination ]] || _installer_fail "Cache destination appeared during staging: $destination"
+    mv -T -- "$temporary/archive" "$destination" || _installer_fail 'Cannot promote cached archive.'
+}
+
 download_verified() {
-    local url=$1 expected=$2 destination=$3 temporary
+    local url=$1 expected=$2 destination=$3 temporary legacy
     _installer_require sha256sum
     [[ $expected =~ ^[0-9a-f]{64}$ ]] || _installer_fail 'Expected a lowercase SHA-256 digest.'
     if [[ -e $destination || -L $destination ]]; then
@@ -115,8 +141,15 @@ download_verified() {
     mkdir -p -- "$(dirname -- "$destination")"
     temporary=$(mktemp -d "$(dirname -- "$destination")/.download.XXXXXXXX")
     _installer_temp_dirs+=("$temporary")
-    _installer_download "$url" "$temporary/archive" ||
-        _installer_fail "Download failed: $url"
+    legacy="$TOOLSHED_DOWNLOAD_DIR/${url#https://}"
+    if [[ $legacy != "$destination" && ( -e $legacy || -L $legacy ) ]]; then
+        [[ -f $legacy ]] || _installer_fail "Not a regular file: $legacy"
+        verify_sha256 "$legacy" "$expected"
+        cp -- "$legacy" "$temporary/archive"
+    else
+        _installer_download "$url" "$temporary/archive" ||
+            _installer_fail "Download failed: $url"
+    fi
     verify_sha256 "$temporary/archive" "$expected"
     mv -fT -- "$temporary/archive" "$destination"
 }
@@ -175,7 +208,7 @@ resolve_latest_version() {
 
 # Cache only authenticated metadata, and reverify it whenever it is reused.
 download_signed_manifest() {
-    local url=$1 key_url=$2 fingerprint=$3 destination=$4 directory
+    local url=$1 key_url=$2 fingerprint=$3 destination=$4 directory legacy
     _installer_require mkdir dirname mv
     if [[ -e $destination || -L $destination ]]; then
         verify_gpg_signature "$destination/manifest.json" "$destination/manifest.json.sig" \
@@ -184,9 +217,15 @@ download_signed_manifest() {
     fi
     mkdir -p -- "$(dirname -- "$destination")"
     stage_directory directory "$(dirname -- "$destination")"
-    _installer_download "$url" "$directory/manifest.json"
-    _installer_download "$url.sig" "$directory/manifest.json.sig"
-    _installer_download "$key_url" "$directory/key.asc"
+    legacy="$(dirname -- "$TOOLSHED_DOWNLOAD_DIR/${url#https://}")/manifest"
+    if [[ $legacy != "$destination" && -d $legacy ]]; then
+        verify_gpg_signature "$legacy/manifest.json" "$legacy/manifest.json.sig" "$legacy/key.asc" "$fingerprint"
+        cp -a -- "$legacy/." "$directory/"
+    else
+        _installer_download "$url" "$directory/manifest.json"
+        _installer_download "$url.sig" "$directory/manifest.json.sig"
+        _installer_download "$key_url" "$directory/key.asc"
+    fi
     verify_gpg_signature "$directory/manifest.json" "$directory/manifest.json.sig" "$directory/key.asc" "$fingerprint"
     mv -T -- "$directory" "$destination"
 }
@@ -351,20 +390,40 @@ install_maven_package() {
 install_pinned_maven() {
     local version=$1 platform checksum url
     platform=$(platform_string)
-    local -A archive_sha256=()
-    source "$_installer_library_dir/../metadata/maven.sh"
-    checksum=${archive_sha256[$version/$platform]:-}
-    [[ $checksum ]] || _installer_fail "No pinned Maven archive for $version/$platform."
+    load_archive_checksum maven "$version" "$platform" || _installer_fail "No pinned Maven archive for $version/$platform."
+    checksum=${archive_sha256[$version/$platform]}
     url="https://archive.apache.org/dist/maven/maven-3/$version/binaries/apache-maven-$version-bin.tar.gz"
     install_maven_package maven "$version" "$url" "$checksum" "apache-maven-$version" mvn "Apache Maven $version"
 }
 
 # Install a pinned release executable, extracting only its requested archive member.
+install_defined_release() {
+    local name=$1; shift
+    local version platform key release_repo release_tag release_asset release_member url digest artifact
+    local -A archive_sha256=() binary_sha256=()
+    source "$_installer_library_dir/../metadata/releases/$name.sh"
+    version=$(select_install_version "$name" "$@")
+    platform=$(platform_string)
+    key="$version/$platform"
+    release_asset=${release_asset//\{version\}/$version}
+    release_member=${release_member//\{version\}/$version}
+    if [[ $release_member ]]; then artifact="/$platform/archive/tar.gz"; else artifact="/$platform/binary"; fi
+    digest=$(python3 "$_installer_library_dir/artifact_metadata.py" checksum \
+        "$_installer_library_dir/../metadata/artifacts/$name.psv" "$version" "$artifact") ||
+        _installer_fail "No pinned $name checksum for $key."
+    archive_sha256[$key]=$digest
+    [[ $release_member ]] || binary_sha256[$key]=$digest
+    url="https://github.com/$release_repo/releases/download/$release_tag$version/$release_asset"
+    install_release_binary "$name" "$version" "$url" "$release_member" "${archive_sha256[$key]}"
+    printf '%s %s is installed in %s\n' "$name" "$version" "$TOOLSHED_BIN_DIR"
+}
+
 install_release_binary() {
-    local name=$1 version=$2 url=$3 member=$4 archive_digest=$5 binary_digest=$6
+    local name=$1 version=$2 url=$3 member=$4 archive_digest=$5 binary_digest
     local archive staging binary output
-    if binary_is_installed "$name" "$binary_digest"; then
-        return
+    if [[ ! $member ]]; then
+        binary_is_installed "$name" "$archive_digest" && return
+        warn_if_modified "$name" "$archive_digest"
     fi
     archive=$(cache_path "$url")
     download_verified "$url" "$archive_digest" "$archive"
@@ -378,22 +437,21 @@ install_release_binary() {
     else
         stage_executable "$archive" binary
     fi
-    verify_sha256 "$binary" "$binary_digest"
-    validate_release_binary "$name" "$version" "$binary"
+    if [[ $member ]]; then
+        binary_digest=$(sha256sum < "$binary"); binary_digest=${binary_digest%% *}
+        binary_is_installed "$name" "$binary_digest" && return
+        warn_if_modified "$name" "$binary_digest"
+    else
+        verify_sha256 "$binary" "$archive_digest"
+        binary_digest=$archive_digest
+    fi
+    validate_tool_binary "$binary" "$version"
     install_binary "$binary" "$name"
 }
 
-validate_release_binary() {
-    local name=$1 version=$2 binary=$3 output staging
-    case $name in
-        cloud-provider-kind|kubebuilder|golangci-lint|crane|trivy|kustomize|cosign) output=$("$binary" version 2>&1) ;;
-        controller-gen|yq) output=$("$binary" --version 2>&1) ;;
-        setup-envtest)
-            stage_directory staging
-            "$binary" list -i --bin-dir "$staging" >/dev/null || _installer_fail 'Cannot run setup-envtest.'
-            output=$version ;;
-        *) _installer_fail "Unsupported release executable: $name" ;;
-    esac || _installer_fail "Cannot run $name."
+validate_release_version() {
+    local binary=$1 version=$2 argument=$3 output
+    output=$("$binary" "$argument" 2>&1) || _installer_fail "Cannot run $name."
     [[ $output == *"$version"* ]] || _installer_fail "Unexpected $name version: $output"
 }
 

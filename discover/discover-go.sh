@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-unset TOOLSHED_OVERRIDE_TOOL_VERSION
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-source "$root/lib/install.sh"
 source "$root/lib/update.sh"
 [[ $(platform_string) == linux-x64 ]] || _installer_fail 'Go discovery supports Linux x86_64 only.'
 _installer_require python3 tar sha256sum
@@ -26,14 +24,13 @@ else:
 PY
 )
 [[ ${version:-} =~ ^[0-9]+\.[0-9]+\.[0-9]+$ && ${checksum:-} =~ ^[0-9a-f]{64}$ ]] || _installer_fail 'Invalid Go release metadata.'
-source "$root/metadata/go.sh"
-key="archive/$version/linux-x64"
-[[ ! ${checksums[$key]+present} || ${checksums[$key]} == "$checksum" ]] || _installer_fail "Conflicting Go checksum: $version/linux-x64"
+key="$version/linux-x64"
+check_recorded_checksums go "$key" "$checksum"
 url="https://go.dev/dl/go${version}.linux-amd64.tar.gz"
 archive=$(cache_path "$url")
 download_verified "$url" "$checksum" "$archive"
 tar -xzf "$archive" -C "$staging" || _installer_fail 'Cannot extract Go archive.'
 verify_go_toolchain "$staging/go" "$version"
-[[ ${checksums[$key]+present} ]] || printf '\nchecksums[%s]=%s\n' "$key" "$checksum" >> "$root/metadata/go.sh"
+record_checksums go "$key" "$checksum"
 record_provenance "go" "$version/linux-x64" "https://go.dev/dl/?mode=json" "$staging/releases.json.peer"
 printf '%s\n' "$version"

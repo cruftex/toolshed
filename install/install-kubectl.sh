@@ -4,10 +4,13 @@ source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/lib/install.sh"
 version=$(select_install_version kubectl "$@")
 platform=$(platform_string)
 key="$version/$platform"
-load_binary_checksums kubectl "$key"
-[[ ${archive_sha256[$key]:-} && ${binary_sha256[$key]:-} ]] || _installer_fail "No pinned kubectl checksums for $key."
+declare -A archive_sha256=() binary_sha256=()
+archive_sha256[$key]=$(python3 "$_installer_library_dir/artifact_metadata.py" checksum \
+    "$_installer_library_dir/../metadata/artifacts/kubectl.psv" "$version" "/$platform/binary") || _installer_fail "No pinned kubectl checksums for $key."
+binary_sha256[$key]=${archive_sha256[$key]}
 url="https://dl.k8s.io/release/v$version/bin/linux/amd64/kubectl"
 if ! binary_is_installed kubectl "${binary_sha256[$key]}"; then
+    warn_if_modified kubectl "${binary_sha256[$key]}"
     archive=$(cache_path "$url")
     download_verified "$url" "${archive_sha256[$key]}" "$archive"
     stage_executable "$archive" binary

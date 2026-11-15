@@ -1,4 +1,0 @@
-declare -A checksums=(
-    [archive/3.1.4/linux-x64]=424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa
-    [binary/3.1.4/linux-x64]=424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa
-)

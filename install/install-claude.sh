@@ -13,6 +13,7 @@ download_signed_manifest "$base_url/$version/manifest.json" https://downloads.cl
 checksum=$(manifest_checksum "$cache/manifest/manifest.json" "$version" "$platform")
 
 if ! binary_is_installed claude "$checksum"; then
+    warn_if_modified claude "$checksum"
     download_verified "$base_url/$version/$platform/claude" "$checksum" "$cache/$platform/claude"
     stage_executable "$cache/$platform/claude" binary
     verify_sha256 "$binary" "$checksum"

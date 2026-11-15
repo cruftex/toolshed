@@ -1,14 +1,21 @@
 #!/usr/bin/env bash
-# Shared helpers for explicit release updates. The caller sources install.sh.
+# Discovery shares installer primitives, while ignoring installer-only overrides.
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/install.sh"
+unset TOOLSHED_OVERRIDE_TOOL_VERSION
 _toolshed_capture_peer=1
+_discovery_timestamp=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
 
 # Record the first successful verification, without inventing historical provenance.
 record_provenance() {
-    local name=$1 key=$2 source_url=$3 peer_file=$4
+    local name=$1 key=$2 source_url=$3 peer_file=$4 timestamp
+    if [[ $name == claude ]]; then
+        python3 "$_installer_library_dir/discovery_records.py" record "$_installer_library_dir/.." "$name" "$key" '' "$_discovery_timestamp"
+    fi
+    timestamp=$(python3 "$_installer_library_dir/discovery_records.py" timestamp "$_installer_library_dir/.." "$name" "$key")
     python3 "$_installer_library_dir/provenance.py" \
-        "$_installer_library_dir/../metadata/provenance/$name.json" "$key" "$source_url" "$peer_file"
+        "$_installer_library_dir/../metadata/provenance/$name.json" "$key" "$source_url" "$peer_file" "$timestamp"
 }
-release_info() {
+github_release_info() {
     local repository=$1 tag_prefix=$2 output=$3
     _installer_download "https://api.github.com/repos/$repository/releases/latest" "$output.json"
     python3 - "$output.json" "$tag_prefix" > "$output" <<'PY'
@@ -21,7 +28,7 @@ if not tag.startswith(prefix) or not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', tag
 print(tag[len(prefix):])
 PY
 }
-release_asset_digest() {
+github_release_asset_digest() {
     python3 - "$1.json" "$2" <<'PY'
 import json, re, sys
 with open(sys.argv[1]) as f:
@@ -32,23 +39,13 @@ print(assets[0]['digest'][7:])
 PY
 }
 check_recorded_checksums() {
-    local name=$1 key=$2 archive=$3 binary=$4
-    local -A checksums=()
-    source "$_installer_library_dir/../metadata/$name.sh"
-    [[ ! ${checksums[archive/$key]+present} || ${checksums[archive/$key]} == "$archive" ]] || _installer_fail "Conflicting archive metadata: $name $key"
-    [[ ! ${checksums[binary/$key]+present} || ${checksums[binary/$key]} == "$binary" ]] || _installer_fail "Conflicting binary metadata: $name $key"
+    local name=$1 key=$2 archive=$3
+    python3 "$_installer_library_dir/discovery_records.py" check "$_installer_library_dir/.." "$name" "$key" "$archive"
 }
 record_checksums() {
-    local name=$1 key=$2 archive=$3 binary=$4
-    check_recorded_checksums "$name" "$key" "$archive" "$binary"
-    local -A checksums=()
-    source "$_installer_library_dir/../metadata/$name.sh"
-    if [[ ! ${checksums[archive/$key]+present} || ! ${checksums[binary/$key]+present} ]]; then
-        printf '\n# Discovered at %s\n' "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$_installer_library_dir/../metadata/$name.sh"
-        [[ ${checksums[archive/$key]+present} ]] || printf 'checksums[archive/%s]=%s\n' "$key" "$archive" >> "$_installer_library_dir/../metadata/$name.sh"
-        [[ ${checksums[binary/$key]+present} ]] || printf 'checksums[binary/%s]=%s\n' "$key" "$binary" >> "$_installer_library_dir/../metadata/$name.sh"
-    fi
-    return 0
+    local name=$1 key=$2 archive=$3
+    check_recorded_checksums "$name" "$key" "$archive"
+    python3 "$_installer_library_dir/discovery_records.py" record "$_installer_library_dir/.." "$name" "$key" "$archive" "$_discovery_timestamp"
 }
 write_version_pin() {
     local name=$1 value=$2
@@ -88,32 +85,34 @@ PY
     [[ -x $staging/apache-maven-$version/bin/mvn ]] || _installer_fail 'Missing Maven executable.'
     output=$("$staging/apache-maven-$version/bin/mvn" --version) || _installer_fail 'Cannot run Maven.'
     [[ $output == "Apache Maven $version "* ]] || _installer_fail 'Unexpected Maven version.'
-    local -A archive_sha256=()
-    source "$_installer_library_dir/../metadata/maven.sh"
     key="$version/linux-x64"
-    [[ ! ${archive_sha256[$key]+present} || ${archive_sha256[$key]} == "$digest" ]] || _installer_fail "Conflicting Maven checksum: $key"
+    check_recorded_checksums "$pin" "$key" "$digest"
     local archive
     archive=$(cache_path "$url")
     download_verified "$url" "$digest" "$archive"
-    if [[ ! ${archive_sha256[$key]+present} ]]; then
-        printf '\narchive_sha256[%s]=%s\n' "$key" "$digest" >> "$_installer_library_dir/../metadata/maven.sh"
-    fi
+    record_checksums "$pin" "$key" "$digest"
     record_provenance "$pin" "$key" "$url.sha512" "$staging/checksum.peer"
     printf '%s\n' "$version"
 }
 
 # Discover one GitHub release, verify and cache its asset, and record both digests.
-discover_release_binary() {
+discover_github_defined_release() {
+    local name=$1 release_repo release_tag release_asset release_member
+    source "$_installer_library_dir/../metadata/releases/$name.sh"
+    discover_github_release_binary "$name" "$release_repo" "$release_tag" "$release_asset" "$release_member"
+}
+
+discover_github_release_binary() {
     local name=$1 repo=$2 tag_prefix=$3 asset_pattern=$4 member_pattern=$5
-    local staging version asset member url archive checksum binary binary_sha
+    local staging version asset member url archive checksum binary
     [[ $(platform_string) == linux-x64 ]] || _installer_fail "$name discovery supports Linux x86_64 only."
     _installer_require python3 sha256sum
     stage_directory staging
-    release_info "$repo" "$tag_prefix" "$staging/release"
+    github_release_info "$repo" "$tag_prefix" "$staging/release"
     version=$(cat "$staging/release")
     asset=${asset_pattern//\{version\}/$version}
     member=${member_pattern//\{version\}/$version}
-    checksum=$(release_asset_digest "$staging/release" "$asset")
+    checksum=$(github_release_asset_digest "$staging/release" "$asset")
     url="https://github.com/$repo/releases/download/$tag_prefix$version/$asset"
     archive=$(cache_path "$url")
     download_verified "$url" "$checksum" "$archive"
@@ -126,9 +125,8 @@ discover_release_binary() {
     else
         stage_executable "$archive" binary
     fi
-    binary_sha=$(sha256sum < "$binary"); binary_sha=${binary_sha%% *}
-    validate_release_binary "$name" "$version" "$binary"
-    record_checksums "$name" "$version/linux-x64" "$checksum" "$binary_sha"
+    validate_tool_binary "$binary" "$version"
+    record_checksums "$name" "$version/linux-x64" "$checksum"
     record_provenance "$name" "$version/linux-x64" "https://api.github.com/repos/$repo/releases/latest" "$staging/release.json.peer"
     printf '%s\n' "$version"
 }

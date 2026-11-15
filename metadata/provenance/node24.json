@@ -1,0 +1,10 @@
+{
+  "24.22.3/linux-x64": {
+    "cache_path": "nodejs.org/dist/v24.22.3/node-v24.22.3-linux-x64.tar.gz",
+    "checksum_url": null,
+    "discovered_at": "2026-11-14T05:34:26Z",
+    "effective_url": null,
+    "peer_ip": null,
+    "timestamp_source": "cache_mtime"
+  }
+}

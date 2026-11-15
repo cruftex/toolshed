@@ -1,0 +1,10 @@
+{
+  "0.41.0/linux-x64": {
+    "cache_path": "nvm/0.41.0/nvm-0.41.0.tar.gz",
+    "checksum_url": null,
+    "discovered_at": "2026-11-14T05:31:06Z",
+    "effective_url": null,
+    "peer_ip": null,
+    "timestamp_source": "cache_mtime"
+  }
+}

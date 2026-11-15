@@ -38,10 +38,8 @@ class CodexInstallerTests(unittest.TestCase):
                     member = tarfile.TarInfo(asset)
                     member.size = len(binary)
                     tar.addfile(member, io.BytesIO(binary))
-                metadata = repo / "metadata" / (name + ".sh")
-                contents = metadata.read_text().replace(archive_pin, hashlib.sha256(archive.read_bytes()).hexdigest())
-                contents = contents.replace(binary_pin, hashlib.sha256(binary).hexdigest())
-                metadata.write_text(contents)
+                artifact_table = repo / 'metadata/artifacts/codex.psv'
+                artifact_table.write_text(artifact_table.read_text().replace(archive_pin, hashlib.sha256(archive.read_bytes()).hexdigest()))
             installer.write_text(script)
             commands = root / "commands"
             commands.mkdir()
@@ -61,10 +59,15 @@ cp "$FIXTURES/${url##*/}" "$out"
             self.assertEqual(result.returncode, 0, result.stderr)
             for name in binaries:
                 self.assertEqual((dest / name).read_bytes(), binaries[name])
+            (dest / 'codex-code-mode-host').write_bytes(b'modified')
+            result = run()
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('WARNING: installed codex-code-mode-host differs', result.stderr)
+            self.assertEqual((dest / 'codex-code-mode-host').read_bytes(), binaries['codex-code-mode-host'])
             shutil.rmtree(cache)
             for name, *_ in PINS:
                 (root / (name + "-x86_64-unknown-linux-musl.tar.gz")).unlink()
-            self.assertEqual(run().returncode, 0)
+            self.assertNotEqual(run().returncode, 0)
             (dest / "codex-code-mode-host").write_bytes(b"modified")
             self.assertNotEqual(run().returncode, 0)
             self.assertEqual((dest / "codex").read_bytes(), binaries["codex"])
@@ -109,6 +112,7 @@ if [[ $url == */latest ]]; then cp "$FIXTURES/release.json" "$out"; else cp "$FI
             self.assertEqual((repo / "pins/codex").read_text(), old_pin)
             for name in binaries:
                 self.assertFalse((dest / name).exists())
-                self.assertIn("0.170.0/linux-x64", (repo / "metadata" / (name + ".sh")).read_text())
+                component = 'host' if name == 'codex-code-mode-host' else ''
+                self.assertIn(f'0.170.0|{component}/linux-x64/archive/tar.gz|', (repo / 'metadata/artifacts/codex.psv').read_text())
             again = subprocess.run([repo / "discover/discover-codex.sh"], cwd=root, env=env, capture_output=True, text=True)
             self.assertEqual(again.returncode, 0, again.stderr)

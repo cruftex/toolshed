@@ -1,0 +1,10 @@
+{
+  "0.169.0/linux-x64": {
+    "cache_path": "github.com/openai/codex/releases/download/rust-v0.169.0/codex-code-mode-host-x86_64-unknown-linux-musl.tar.gz",
+    "checksum_url": null,
+    "discovered_at": "2026-11-14T04:46:17Z",
+    "effective_url": null,
+    "peer_ip": null,
+    "timestamp_source": "cache_mtime"
+  }
+}

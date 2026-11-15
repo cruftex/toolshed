@@ -4,7 +4,7 @@
 
 Run `./install/install-java25.sh` to install Oracle JDK 25.0.5 on Linux
 x86_64 with glibc. The installer verifies the version-specific archive against
-the SHA-256 in `metadata/java25.sh` before extraction, installs the JDK under
+the SHA-256 in `metadata/artifacts/java25.psv` before extraction, installs the JDK under
 `$TOOLSHED_OPT_DIR/java25/25.0.5`, and links its executable tools into
 `TOOLSHED_BIN_DIR`. It does not use SDKMAN, sudo, or modify shell profiles. Set
 `TOOLSHED_BIN_DIR` on your PATH yourself. An incomplete existing Java installation
@@ -35,19 +35,35 @@ Run `./install/install-codex.sh` to install Codex 0.169.0 and its matching
 in `TOOLSHED_BIN_DIR`; verified cached archives are reused when needed.
 
 Bun and Vegeta use the same metadata layout: their pins are in `pins/`, and
-paired archive and executable digests are in `metadata/`. Explicit updates use
+source archive digests are in `metadata/artifacts/`. Explicit updates use
 `./discover/discover-bun.sh` or `./discover/discover-vegeta.sh`. They verify archives
-against GitHub release digests and calculate executable digests before recording
-them without running the installer. Vegeta's updater downloads all four supported
+against GitHub release digests and record source checksums without running the
+installer. Vegeta's updater downloads all four supported
 platform archives. These GitHub digests rely on release metadata over HTTPS.
 
-The Codex pin is in `pins/codex`; the archive and executable digests for each
-component are in `metadata/codex.sh` and `metadata/codex-code-mode-host.sh`.
+The Codex pin is in `pins/codex`; the source archive digests for both
+components are in `metadata/artifacts/codex.psv`.
 Run `./discover/discover-codex.sh` to explicitly update Codex. It reads the latest
 stable GitHub release, verifies both downloaded archives against GitHub's release
-digests and records the calculated executable digests without changing the pin
+digests and records the source checksums without changing the pin
 or installing the release. This update trusts GitHub's release metadata over HTTPS; its digests
 are not independently authenticated. The updater records metadata in this checkout. Normal installs do not look up releases.
+
+On 2026-11-15, the pinned Codex, kubectl, Helm, Go, Java 25, Node, Maven
+3.9 and 3.10, and mvnd downloads listed below were downloaded again; each
+SHA-256 matched the artifact table, and each publisher checksum matched where
+available. The pinned NVM Git tag and commit were fetched again and its generated
+archive matched the pinned SHA-256. Fresh and repeat installs passed in isolated
+temporary paths. Codex, kubectl, and Helm also repaired modified executables and
+emitted warnings. Maven Daemon required an unsandboxed local daemon smoke test.
+Claude Code 2.1.325's freshly downloaded signed manifest was checked against
+the pinned fingerprint; Linux x64 and ARM64 binaries matched its checksums. The
+x64 installer passed fresh, repeat, and modified-binary warning and repair tests.
+The [Linux x64 binary](https://downloads.claude.ai/claude-code-releases/2.1.325/linux-x64/claude)
+has SHA-256 `0dc4f4a9a165fc60746d7ae8489712e5fc352f1e7ad4eb22e7141bd0812eb0cf`;
+the [Linux ARM64 binary](https://downloads.claude.ai/claude-code-releases/2.1.325/linux-arm64/claude)
+has SHA-256 `7b6e484b1989a5a14a4b354709ccc8672518a3ec5b9ccd7981fc6254327fde67`.
+The ARM64 binary was checksum-verified but not executed on the x64 host.
 
 Codex smoke test on 2026-11-13, Linux x86_64: the locally calculated archive
 SHA-256 values matched GitHub's release digests:
@@ -61,10 +77,24 @@ Installation and repeat installation in temporary directories succeeded;
 `codex --version` reported `codex-cli 0.169.0` and the host's `--help` ran.
 
 The Vegeta 12.13.0 release archives were downloaded and hashed on 2026-11-13;
-all four archive hashes in `metadata/vegeta.sh` matched GitHub's release digests,
+all four archive hashes in `metadata/artifacts/vegeta.psv` matched GitHub's release digests,
 and the extracted binary hashes matched the metadata. Installation, repeat
 installation and `vegeta --version` succeeded for Linux x86_64. Bun 1.4.4's
 real archive installation and repeat installation passed in the test suite.
+On 2026-11-15, the Bun 1.4.4 ZIP and all four Vegeta 12.13.0 platform archives
+were downloaded again. Each source SHA-256 matched its artifact table and GitHub
+release asset digest. On Linux x86_64, fresh installation, repeat installation,
+modified-executable repair, and preservation on a missing-cache download failure
+passed for both tools. Archive-based repeat installs now require the verified
+archive, including when the installed executable already matches.
+
+| Download | Source SHA-256 |
+| --- | --- |
+| [Bun 1.4.4 Linux x64](https://github.com/oven-sh/bun/releases/download/bun-v1.4.4/bun-linux-x64.zip) | `bf8ccbfb2b0b80159e0f9a6d15c55317add8077534dbc6130a3edb52fccb395c` |
+| [Vegeta 12.13.0 Linux x64](https://github.com/tsenart/vegeta/releases/download/v12.13.0/vegeta_12.13.0_linux_amd64.tar.gz) | `e8759ce45c14e18374bdccd3ba6068197bc3a9f9b7e484db3837f701b9d12e61` |
+| [Vegeta 12.13.0 Linux ARM64](https://github.com/tsenart/vegeta/releases/download/v12.13.0/vegeta_12.13.0_linux_arm64.tar.gz) | `950381173a5575e25e8e086f36fc03bf65d61a2433329b48e41e1cb5e4133bba` |
+| [Vegeta 12.13.0 macOS x64](https://github.com/tsenart/vegeta/releases/download/v12.13.0/vegeta_12.13.0_darwin_amd64.tar.gz) | `4e912c83ce07db4e1e394e1cbb657f2396dff2f7ed90f03869a184cc17d0f994` |
+| [Vegeta 12.13.0 macOS ARM64](https://github.com/tsenart/vegeta/releases/download/v12.13.0/vegeta_12.13.0_darwin_arm64.tar.gz) | `fc408e242c4f4839e6fe536dbf1130bb02f430134827f6d831bf367a0929a799` |
 
 Run `./install/install-maven39.sh` for Apache Maven 3.9.16,
 `./install/install-maven310.sh` for Maven 3.10.0, and
@@ -117,6 +147,10 @@ Its extracted files were compared with the previously verified GitHub release
 archive. A temporary-directory upgrade and repeat installation succeeded on
 Linux x86_64, preserving an existing Node directory and backing up legacy Git
 metadata.
+On 2026-11-15, the cached NVM 0.41.0 Git archive was rehashed against the
+recorded SHA-256 and used to smoke-test a fresh install, platform-cache migration,
+and repeat installation in a temporary path containing spaces; `nvm --version`
+reported 0.41.0. This check reused the existing archive without downloading it.
 
 Kubernetes tools were downloaded and tested on Linux x86_64 with glibc:
 
@@ -138,11 +172,27 @@ The executable SHA-256 values, which also serve as download digests, are:
 
 Both executables reported their pinned versions; their installers were smoke-tested
 from the verified cache and repeated in temporary paths containing spaces.
+On 2026-11-15, both assets were downloaded again and matched the recorded hashes
+and GitHub release asset digests. The refactored installers passed installation,
+reinstallation from cache, and a repeat with the cache removed.
 
 The following Linux x86_64 release assets were downloaded, hashed locally and
 matched against the publishers’ GitHub release asset digests. Installers were
 smoke-tested in temporary paths containing spaces, then repeated without a cache.
 For setup-envtest the smoke test used `list -i` because it has no version command.
+On 2026-11-15, all ten assets in this table were downloaded again and their
+archive hashes matched both the recorded pins and the GitHub release asset
+digests; their extracted executable hashes also matched the recorded pins. The
+refactored installers succeeded in temporary paths containing spaces, reinstalled
+from the verified cache after removing the executable, and skipped replacement
+on a further run after the cache was removed. Each installation validated the
+executable using its tool-specific version check (or `list -i` for setup-envtest).
+The same cached assets were retested after moving their release definitions into
+per-tool files; the hash and installation checks passed again.
+After switching these installers to source-artifact metadata, the same verified
+downloads were tested again: installation, reinstallation from cache, and repair
+of a modified executable all passed. Archive-based repeat installs now verify
+and extract their cached archive to compare executable bytes.
 
 | Tool | Versioned asset | Download SHA-256 | Executable SHA-256 |
 | --- | --- | --- | --- |

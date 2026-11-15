@@ -14,6 +14,37 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 
 class UpdateTests(unittest.TestCase):
+    def test_missing_provenance_is_completed_without_replacing_discovery_time(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'provenance.json'
+            peer = Path(tmp) / 'peer'
+            key = '1.2.3/linux-x64'
+            source = 'https://example.test/checksum'
+            path.write_text(json.dumps({key: {'discovered_at': '2020-01-01T00:00:00Z',
+                                             'checksum_url': source, 'effective_url': None, 'peer_ip': None}}))
+            peer.write_text('192.0.2.5\nhttps://example.test/final\n')
+            subprocess.run(['python3', ROOT / 'lib/provenance.py', path, key, source, peer], check=True)
+            entry = json.loads(path.read_text())[key]
+            self.assertEqual(entry['discovered_at'], '2020-01-01T00:00:00Z')
+            self.assertEqual(entry['peer_ip'], '192.0.2.5')
+            self.assertEqual(entry['effective_url'], 'https://example.test/final')
+            self.assertIn('peer_observed_at', entry)
+
+    def test_provenance_uses_authoritative_artifact_timestamp(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'provenance.json'
+            peer = Path(tmp) / 'peer'
+            key = '1.2.3/linux-x64'
+            source = 'https://example.test/checksum'
+            path.write_text(json.dumps({key: {'discovered_at': '2020-01-01T00:00:00Z',
+                                             'checksum_url': source, 'effective_url': source,
+                                             'peer_ip': '192.0.2.5'}}))
+            subprocess.run(['python3', ROOT / 'lib/provenance.py', path, key, source, peer,
+                            '2019-01-01T00:00:00Z'], check=True)
+            entry = json.loads(path.read_text())[key]
+            self.assertEqual(entry['discovered_at'], '2019-01-01T00:00:00Z')
+            self.assertEqual(entry['peer_ip'], '192.0.2.5')
+
     def test_bun_update_and_repeat(self):
         with tempfile.TemporaryDirectory(prefix='bun update ') as temp:
             root = Path(temp)
@@ -31,6 +62,7 @@ class UpdateTests(unittest.TestCase):
             commands.mkdir()
             curl = commands / 'curl'
             curl.write_text('''#!/bin/bash
+[[ ! ${TOOLSHED_OVERRIDE_TOOL_VERSION+x} ]] || exit 9
 while (($#)); do
  case $1 in https://*) url=$1 ;; --output) out=$2; shift ;; esac
  shift
@@ -39,7 +71,8 @@ if [[ $url == */latest ]]; then cp "$FIXTURE/release.json" "$out"; else cp "$FIX
 printf '192.0.2.10\\n%s\\n' "${url%/latest}/redirected"
 ''')
             curl.chmod(0o755)
-            env = dict(os.environ, PATH=f'{commands}:{os.environ["PATH"]}', FIXTURE=str(root))
+            env = dict(os.environ, PATH=f'{commands}:{os.environ["PATH"]}', FIXTURE=str(root),
+                       TOOLSHED_OVERRIDE_TOOL_VERSION='invalid-discovery-override')
             old_pin = (repo / 'pins/bun').read_text()
             for _ in range(2):
                 result = subprocess.run([repo / 'discover/discover-bun.sh'], cwd=root, env=env, capture_output=True, text=True)
@@ -47,14 +80,14 @@ printf '192.0.2.10\\n%s\\n' "${url%/latest}/redirected"
             self.assertEqual((repo / 'pins/bun').read_text(), old_pin)
             self.assertFalse((root / 'bin/bun').exists())
             self.assertEqual(result.stdout.strip(), '1.5.0')
-            metadata = (repo / 'metadata/bun.sh').read_text()
-            self.assertEqual(metadata.count('archive/1.5.0/linux-x64'), 1)
-            self.assertEqual(metadata.count('binary/1.5.0/linux-x64'), 1)
-            self.assertRegex(metadata, r'# Discovered at \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\nchecksums\[archive/1\.5\.0/linux-x64\]=[^\n]+\nchecksums\[binary/1\.5\.0/linux-x64\]=')
+            metadata = (repo / 'metadata/artifacts/bun.psv').read_text()
+            self.assertEqual(metadata.count('1.5.0|/linux-x64/archive/zip|'), 1)
             provenance = json.loads((repo / 'metadata/provenance/bun.json').read_text())['1.5.0/linux-x64']
             self.assertEqual(provenance['peer_ip'], '192.0.2.10')
             self.assertEqual(provenance['checksum_url'], 'https://api.github.com/repos/oven-sh/bun/releases/latest')
             self.assertEqual(provenance['effective_url'], 'https://api.github.com/repos/oven-sh/bun/releases/redirected')
+            rows = (repo / 'metadata/artifacts/bun.psv').read_text()
+            self.assertIn('1.5.0|/linux-x64/archive/zip|' + hashlib.sha256(archive.read_bytes()).hexdigest() + '|' + provenance['discovered_at'], rows)
 
     def test_kubernetes_discovery_and_install_from_cache(self):
         with tempfile.TemporaryDirectory(prefix='kubernetes discovery ') as temp:
@@ -97,8 +130,8 @@ if [[ $url == */latest ]]; then cp "$FIXTURE/release.json" "$out"; else cp "$FIX
                         self.assertEqual(result.returncode, 0, result.stderr)
                         self.assertEqual(result.stdout.strip(), version)
                     self.assertEqual((repo / 'pins' / tool).read_text(), pin)
-                    metadata = (repo / 'metadata' / f'{tool}.sh').read_text()
-                    self.assertEqual(metadata.count(f'archive/{version}/linux-x64'), 1)
+                    metadata = (repo / 'metadata/artifacts' / f'{tool}.psv').read_text()
+                    self.assertEqual(metadata.count(f'{version}|/linux-x64/'), 1)
                     env['TOOLSHED_OVERRIDE_TOOL_VERSION'] = version
                     curl.rename(commands / 'curl.disabled')
                     result = subprocess.run([repo / 'install' / f'install-{tool}.sh'], env=env, capture_output=True, text=True)
@@ -107,10 +140,10 @@ if [[ $url == */latest ]]; then cp "$FIXTURE/release.json" "$out"; else cp "$FIX
                     (commands / 'curl.disabled').rename(curl)
                     del env['TOOLSHED_OVERRIDE_TOOL_VERSION']
                     (root / checksum_name).write_text('0' * 64 + ('' if tool == 'kubectl' else '  ' + asset) + '\n')
-                    before = (repo / 'metadata' / f'{tool}.sh').read_bytes()
+                    before = (repo / 'metadata/artifacts' / f'{tool}.psv').read_bytes()
                     result = subprocess.run([repo / 'discover' / f'discover-{tool}.sh'], env=env, capture_output=True, text=True)
                     self.assertNotEqual(result.returncode, 0)
-                    self.assertEqual((repo / 'metadata' / f'{tool}.sh').read_bytes(), before)
+                    self.assertEqual((repo / 'metadata/artifacts' / f'{tool}.psv').read_bytes(), before)
                     self.assertEqual((repo / 'pins' / tool).read_text(), pin)
 
     def test_kind_and_clusterctl_discovery(self):
@@ -146,7 +179,7 @@ if [[ $url == */latest ]]; then cp "$FIXTURE/release.json" "$out"; else cp "$FIX
                         self.assertEqual(result.returncode, 0, result.stderr)
                         self.assertEqual(result.stdout.strip(), version)
                     self.assertEqual((repo / 'pins' / tool).read_text(), pin)
-                    self.assertEqual((repo / 'metadata' / f'{tool}.sh').read_text().count(f'archive/{version}/linux-x64'), 1)
+                    self.assertEqual((repo / 'metadata/artifacts' / f'{tool}.psv').read_text().count(f'{version}|/linux-x64/'), 1)
                     env['TOOLSHED_OVERRIDE_TOOL_VERSION'] = version
                     curl.rename(commands / 'curl.disabled')
                     result = subprocess.run([repo / 'install' / f'install-{tool}.sh'], env=env, capture_output=True, text=True)
@@ -155,10 +188,10 @@ if [[ $url == */latest ]]; then cp "$FIXTURE/release.json" "$out"; else cp "$FIX
                     del env['TOOLSHED_OVERRIDE_TOOL_VERSION']
                     release['assets'][0]['digest'] = 'sha256:' + '0' * 64
                     (root / 'release.json').write_text(json.dumps(release))
-                    before = (repo / 'metadata' / f'{tool}.sh').read_bytes()
+                    before = (repo / 'metadata/artifacts' / f'{tool}.psv').read_bytes()
                     result = subprocess.run([repo / 'discover' / f'discover-{tool}.sh'], env=env, capture_output=True, text=True)
                     self.assertNotEqual(result.returncode, 0)
-                    self.assertEqual((repo / 'metadata' / f'{tool}.sh').read_bytes(), before)
+                    self.assertEqual((repo / 'metadata/artifacts' / f'{tool}.psv').read_bytes(), before)
 
     def test_controller_release_discovery_verifies_and_installs(self):
         with tempfile.TemporaryDirectory(prefix='controller discovery ') as temp:
@@ -190,7 +223,7 @@ if [[ $url == */latest ]]; then cp "$FIXTURE/release.json" "$out"; else cp "$FIX
                 result = subprocess.run([repo / 'discover/discover-controller-gen.sh'], env=env, capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual((repo / 'pins/controller-gen').read_text(), pin)
-            self.assertEqual((repo / 'metadata/controller-gen.sh').read_text().count('archive/0.24.0/linux-x64'), 1)
+            self.assertEqual((repo / 'metadata/artifacts/controller-gen.psv').read_text().count('0.24.0|/linux-x64/binary|'), 1)
             env['TOOLSHED_OVERRIDE_TOOL_VERSION'] = version
             curl.rename(commands / 'curl.disabled')
             result = subprocess.run([repo / 'install/install-controller-gen.sh'], env=env, capture_output=True, text=True)
@@ -199,10 +232,10 @@ if [[ $url == */latest ]]; then cp "$FIXTURE/release.json" "$out"; else cp "$FIX
             del env['TOOLSHED_OVERRIDE_TOOL_VERSION']
             release['assets'][0]['digest'] = 'sha256:' + '0' * 64
             (root / 'release.json').write_text(json.dumps(release))
-            before = (repo / 'metadata/controller-gen.sh').read_bytes()
+            before = (repo / 'metadata/artifacts/controller-gen.psv').read_bytes()
             result = subprocess.run([repo / 'discover/discover-controller-gen.sh'], env=env, capture_output=True, text=True)
             self.assertNotEqual(result.returncode, 0)
-            self.assertEqual((repo / 'metadata/controller-gen.sh').read_bytes(), before)
+            self.assertEqual((repo / 'metadata/artifacts/controller-gen.psv').read_bytes(), before)
 
     def test_vegeta_update_records_all_platforms(self):
         with tempfile.TemporaryDirectory(prefix='vegeta update ') as temp:
@@ -238,13 +271,13 @@ if [[ $url == */latest ]]; then cp "$FIXTURE/release.json" "$out"; else cp "$FIX
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual((repo / 'pins/vegeta').read_text(), old_pin)
             self.assertFalse((root / 'bin/vegeta').exists())
-            for platform in ('linux_amd64', 'linux_arm64', 'darwin_amd64', 'darwin_arm64'):
-                self.assertIn(f'archive/12.14.0/{platform}', (repo / 'metadata/vegeta.sh').read_text())
-            metadata = repo / 'metadata/vegeta.sh'
+            for platform in ('linux-x64', 'linux-aarch64', 'darwin-x64', 'darwin-aarch64'):
+                self.assertIn(f'12.14.0|/{platform}/archive/tar.gz|', (repo / 'metadata/artifacts/vegeta.psv').read_text())
+            metadata = repo / 'metadata/artifacts/vegeta.psv'
             lines = metadata.read_text().splitlines(keepends=True)
-            lines = [line for line in lines if '12.14.0/linux_amd64' not in line]
+            lines = [line for line in lines if '12.14.0|/linux-x64/' not in line]
             lines = [line.replace(next(a['digest'][7:] for a in assets if 'darwin_arm64' in a['name']), '0' * 64)
-                     if 'archive/12.14.0/darwin_arm64' in line else line for line in lines]
+                     if '12.14.0|/darwin-aarch64/' in line else line for line in lines]
             metadata.write_text(''.join(lines))
             before = metadata.read_bytes()
             pin = (repo / 'pins/vegeta').read_bytes()
