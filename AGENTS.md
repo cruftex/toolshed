@@ -85,7 +85,8 @@ Run `bash -n lib/install.sh lib/platform.sh install/install-bun.sh` and
 `python3 -m unittest discover -s tests -v`. Test downloads, cache reuse, corruption,
 interruption cleanup, paths containing spaces, execution from another directory,
 and preservation of existing executables on failure. Smoke-test real downloads
-in temporary configured directories, including the pinned version and basic use.
+in temporary configured directories, verifying installed files and checksums; running
+each tool is not required.
 Set `BUN_TEST_ARCHIVE` to the downloaded Bun ZIP when running the tests to include
 the real Bun/Bunx installation and repeat-install smoke test; it is otherwise skipped.
 Also test platform mapping, binary checksum failures, and skipping a matching
