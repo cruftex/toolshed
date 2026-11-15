@@ -75,7 +75,8 @@ use repository-recorded verification metadata, or Claude's signed manifest.
 | Tool | Version | Platform | Installer |
 | --- | --- | --- | --- |
 | Bun | 1.4.4 | Linux x86_64, glibc | `install/install-bun.sh` |
-| Oracle Java | 25.0.5 | Linux x86_64, glibc | `install/install-java25.sh` |
+| Eclipse Temurin Java | 25.0.5+8 | Linux x86_64, glibc | `install/install-java25.sh` |
+| Oracle Java | 25.0.5 | Linux x86_64, glibc | `install/install-oracle-java25.sh` |
 
 Bun's `bunx` entry point is a relative symlink to the `bun` executable.
 

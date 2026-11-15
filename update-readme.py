@@ -18,6 +18,8 @@ def strategy(name):
         return 'Verified Git archive in NVM directory'
     if name == 'node24':
         return 'Verified archive in NVM directory'
+    if name == 'oracle-java25':
+        return 'Verified package in opt; activate with profile'
     if name in {'go', 'java25', 'maven39', 'maven310', 'mvnd'}:
         return 'Verified package in opt; entry points in bin'
     return 'Verified executable in bin'

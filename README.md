@@ -43,6 +43,7 @@ metadata changes with `./update-readme.py`.
 | [mvnd](install/install-mvnd.sh) | 1.0.6 | Verified package in opt; entry points in bin |
 | [node24](install/install-node24.sh) | 24.22.3 | Verified archive in NVM directory; source [`profile.d/node24.sh`](profile.d/node24.sh) |
 | [nvm](install/install-nvm.sh) | 0.41.0 | Verified Git archive in NVM directory |
+| [oracle-java25](install/install-oracle-java25.sh) | 25.0.5 | Verified package in opt; activate with profile; source [`profile.d/oracle-java25.sh`](profile.d/oracle-java25.sh) |
 | [setup-envtest](install/install-setup-envtest.sh) | 0.25.2 | Verified executable in bin |
 | [trivy](install/install-trivy.sh) | 0.76.2 | Verified executable in bin |
 | [vegeta](install/install-vegeta.sh) | 12.13.0 | Verified executable in bin |
@@ -81,7 +82,9 @@ setup-envtest downloads Kubernetes test assets separately when requested.
 
 Most commands are available in `TOOLSHED_BIN_DIR` after installation. Source
 `profile.d/node24.sh` to activate Node, or `profile.d/java25.sh` to set
-`JAVA_HOME` and activate Java. Source `belts/n24j25.sh` to activate both in the
+`JAVA_HOME` and activate Eclipse Temurin Java. Oracle JDK is installed by
+`install-oracle-java25.sh` into opt only (no `bin` links); source
+`profile.d/oracle-java25.sh` to use it. Source `belts/n24j25.sh` to activate both in the
 current shell. These scripts do not install missing tools.
 The profiles select the pinned versions, including after an installation with
 an override.

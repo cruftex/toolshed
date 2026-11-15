@@ -106,7 +106,7 @@ warn_if_modified() {
 # Preserve the HTTPS host and path as cache directories, rejecting ambiguous paths.
 cache_path() {
     local path=${1#https://} target=${2:-}
-    [[ $1 == https://* && $path =~ ^[a-zA-Z0-9._~-]+(/[a-zA-Z0-9._~-]+)+$ && /$path/ != */../* && /$path/ != */./* ]] ||
+    [[ $1 == https://* && $path =~ ^[a-zA-Z0-9._~%-]+(/[a-zA-Z0-9._~%-]+)+$ && /$path/ != */../* && /$path/ != */./* ]] ||
         _installer_fail "Unsupported cache URL: $1"
     [[ $target ]] || target=$(platform_string)
     [[ $target =~ ^(linux|darwin)-(x64|aarch64)$ ]] || _installer_fail "Unsupported cache platform: $target"

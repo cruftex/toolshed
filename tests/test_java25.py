@@ -24,14 +24,14 @@ class JavaInstallerTests(unittest.TestCase):
         (self.repo / 'env').write_text('\n'.join(f'{key}={shlex.quote(str(value))}' for key, value in [('TOOLSHED_DOWNLOAD_DIR', self.cache), ('TOOLSHED_BIN_DIR', self.bin), ('TOOLSHED_OPT_DIR', self.opt)]) + '\n')
         self.archive = self.root / 'java.tar.gz'
         with tarfile.open(self.archive, 'w:gz') as tar:
-            for name, content in [('java', b'#!/bin/sh\necho "java 25.0.5 2026-10-20"\n'), ('javac', b'#!/bin/sh\necho "javac 25.0.5"\n')]:
-                info = tarfile.TarInfo('jdk-25.0.5/bin/' + name)
+            for name, content in [('java', b'#!/bin/sh\necho "openjdk 25.0.5 2026-10-20"\n'), ('javac', b'#!/bin/sh\necho "javac 25.0.5"\n')]:
+                info = tarfile.TarInfo('jdk-25.0.5+8/bin/' + name)
                 info.mode = 0o755
                 info.size = len(content)
                 tar.addfile(info, io.BytesIO(content))
         digest = hashlib.sha256(self.archive.read_bytes()).hexdigest()
         artifact_table = self.repo / 'metadata/artifacts/java25.psv'
-        artifact_table.write_text(artifact_table.read_text().replace('8748e3837bbceabfa17548564b6d814d123bd820e947e30dff885202b6f24f2c', digest))
+        artifact_table.write_text(artifact_table.read_text().replace('68982529869257d0ee6b824ec5aa270ff8b118bb438670da0b97ebdab178d7fb', digest))
         commands = self.root / 'commands'
         commands.mkdir()
         curl = commands / 'curl'
@@ -41,8 +41,7 @@ while (($#)); do
  shift
 done
 case $url in
- */downloads/) printf '<h3 id="java25">Java SE Development Kit 25.0.5.0.3 downloads</h3>' > "$out" ;;
- *.sha256) printf '%s' "$TEST_DIGEST" > "$out" ;;
+ https://api.adoptium.net/*) printf '[{"version":{"semver":"25.0.5+8.0.LTS"},"binary":{"image_type":"jdk","os":"linux","architecture":"x64","heap_size":"normal","package":{"name":"OpenJDK25U-jdk_x64_linux_hotspot_25.0.5_8.tar.gz","checksum":"%s"}}}]' "$TEST_DIGEST" > "$out" ;;
  *) cp "$TEST_ARCHIVE" "$out" ;;
 esac
 ''')
@@ -73,7 +72,7 @@ esac
         self.assertEqual((self.bin / 'java').read_text(), 'existing')
         self.assertFalse((self.opt / 'java25/25.0.5').exists())
 
-    def test_update_uses_oracle_metadata(self):
+    def test_update_uses_adoptium_metadata(self):
         result = self.run_script('discover/discover-java25.sh')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual((self.repo / 'pins/java25').read_text(), '25.0.5\n')

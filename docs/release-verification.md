@@ -2,11 +2,22 @@
 
 ## Installation details
 
-Run `./install/install-java25.sh` to install Oracle JDK 25.0.5 on Linux
+### Eclipse Temurin Java 25 (`java25`)
+
+`./install/install-java25.sh` installs Eclipse Temurin 25.0.5+8 (Linux x86_64, glibc) under
+`$TOOLSHED_OPT_DIR/java25/25.0.5` and links its tools into `TOOLSHED_BIN_DIR`. The
+[archive](https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.5%2B8/OpenJDK25U-jdk_x64_linux_hotspot_25.0.5_8.tar.gz)
+had locally calculated SHA-256 `68982529869257d0ee6b824ec5aa270ff8b118bb438670da0b97ebdab178d7fb`,
+matching Adoptium's published checksum. Smoke test 2026-11-15: installed twice from a verified cache;
+the second run skipped the matching installation. The build number is pinned in `metadata/java25-builds`.
+`./discover/discover-java25.sh` reads Adoptium's latest-release API and records the digest without moving the pin.
+
+### Oracle JDK 25 (`oracle-java25`)
+
+Run `./install/install-oracle-java25.sh` to install Oracle JDK 25.0.5 on Linux
 x86_64 with glibc. The installer verifies the version-specific archive against
-the SHA-256 in `metadata/artifacts/java25.psv` before extraction, installs the JDK under
-`$TOOLSHED_OPT_DIR/java25/25.0.5`, and links its executable tools into
-`TOOLSHED_BIN_DIR`. It does not use SDKMAN, sudo, or modify shell profiles. Set
+the SHA-256 in `metadata/artifacts/oracle-java25.psv` before extraction and installs the JDK under
+`$TOOLSHED_OPT_DIR/oracle-java25/25.0.5`. It does not link into `TOOLSHED_BIN_DIR`; source `profile.d/oracle-java25.sh`. It does not use SDKMAN, sudo, or modify shell profiles. Set
 `TOOLSHED_BIN_DIR` on your PATH yourself. An incomplete existing Java installation
 is left in place and must be repaired manually.
 
@@ -22,7 +33,7 @@ had locally calculated SHA-256
 matching [Oracle's checksum](https://download.oracle.com/java/25/archive/jdk-25.0.5_linux-x64_bin.tar.gz.sha256).
 A temporary-directory smoke test installed it twice, checked `java --version`,
 and compiled and ran a Java program.
-`./discover/discover-java25.sh` checks Oracle's current Java 25 release and published
+`./discover/discover-oracle-java25.sh` checks Oracle's current Java 25 release and published
 checksum, verifies and tests its archive, records its digest without moving the pin or installing it. Updates trust Oracle's release metadata and checksum over HTTPS.
 
 Activate the Node 24 and Java 25 collection in your current shell with
