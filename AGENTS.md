@@ -69,6 +69,11 @@ use repository-recorded verification metadata, or Claude's signed manifest.
   (primitives), `lib/tool.sh` (descriptor loading and the generic `bin`/`opt` flows) and
   `lib/update.sh` (discovery). Prefer a new descriptor setting over a hook when several
   tools need the same behaviour.
+- Prefer Bash with standard utilities over inline Python: use `jq` for JSON, `awk` for PSV lookups,
+  and `grep`/`sed`/`sort` for simple text or XML extraction, then validate results with Bash regexes.
+  Keep Python for real logic (`lib/shed.py`, `lib/tools.py`, provenance, PSV validation and writing)
+  and for parsing that Bash cannot do well, such as HTML to text (the Oracle license in
+  `tools/oracle-java25.sh`). `jq` is a prerequisite; check it with `_installer_require jq`.
 - The library loads `env`, owns temporary-file cleanup and signal traps, and
   provides platform, download, extraction, version, and installation helpers.
 - Build GitHub asset names using `platform_string` (or run `lib/platform.sh`),

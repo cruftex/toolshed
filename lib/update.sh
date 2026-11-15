@@ -17,27 +17,18 @@ record_provenance() {
         "$toolshed_root/metadata/provenance/$name.json" "$key" "$source_url" "$peer_file" "$timestamp"
 }
 github_release_info() {
-    local repository=$1 tag_prefix=$2 output=$3
+    local repository=$1 tag_prefix=$2 output=$3 version
     _installer_download "https://api.github.com/repos/$repository/releases/latest" "$output.json"
-    python3 - "$output.json" "$tag_prefix" > "$output" <<'PY'
-import json, re, sys
-with open(sys.argv[1]) as f:
-    release = json.load(f)
-tag, prefix = release['tag_name'], sys.argv[2]
-if not tag.startswith(prefix) or not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', tag[len(prefix):]) or release['draft'] or release['prerelease']:
-    sys.exit('Invalid release metadata')
-print(tag[len(prefix):])
-PY
+    version=$(jq -er --arg p "$tag_prefix" 'select((.draft or .prerelease) | not) | .tag_name
+        | select(startswith($p)) | ltrimstr($p)' "$output.json") || version=
+    [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || _installer_fail 'Invalid release metadata'
+    printf '%s\n' "$version" > "$output"
 }
 github_release_asset_digest() {
-    python3 - "$1.json" "$2" <<'PY'
-import json, re, sys
-with open(sys.argv[1]) as f:
-    assets = [a for a in json.load(f)['assets'] if a['name'] == sys.argv[2]]
-if len(assets) != 1 or not re.fullmatch(r'sha256:[0-9a-f]{64}', assets[0].get('digest') or ''):
-    sys.exit('Missing or invalid release digest for ' + sys.argv[2])
-print(assets[0]['digest'][7:])
-PY
+    local digest
+    digest=$(jq -r --arg n "$2" '[.assets[] | select(.name == $n)] | if length == 1 then .[0].digest // "" else "" end' "$1.json")
+    [[ $digest =~ ^sha256:[0-9a-f]{64}$ ]] || _installer_fail "Missing or invalid release digest for $2"
+    printf '%s\n' "${digest#sha256:}"
 }
 check_recorded_checksums() {
     python3 "$_installer_library_dir/discovery_records.py" check "$toolshed_root" "$1" "$2" "$3"
@@ -46,11 +37,35 @@ record_checksums() {
     check_recorded_checksums "$1" "$2" "$3"
     python3 "$_installer_library_dir/discovery_records.py" record "$toolshed_root" "$1" "$2" "$3" "$_discovery_timestamp"
 }
+# Store a license text once as metadata/license/<sha256>.txt, its short name in <sha256>.name.txt; set the
+# variable named by the third argument to the digest.
+store_license() {
+    local _text=$1 _name=$2 _directory="$toolshed_root/metadata/license" _digest _stored _temporary
+    local -n _store_digest=$3
+    [[ $_name =~ ^[a-z0-9][a-z0-9.+-]*$ ]] || _installer_fail "Invalid license name: $_name"
+    [[ -n $(tr -d '[:space:]' < "$_text") ]] || _installer_fail 'Empty license text'
+    _digest=$(sha256sum < "$_text")
+    _digest=${_digest%% *}
+    if [[ -e $_directory/$_digest.name.txt ]]; then
+        _stored=$(< "$_directory/$_digest.name.txt")
+        [[ $_stored == "$_name" ]] || _installer_fail "License $_digest already stored as $_stored"
+    fi
+    [[ ! -e $_directory/$_digest.txt ]] || _installer_check_sha256 "$_directory/$_digest.txt" "$_digest" ||
+        _installer_fail "Stored license is corrupt: $_digest.txt"
+    mkdir -p -- "$_directory"
+    stage_directory _temporary "$_directory"
+    if [[ ! -e $_directory/$_digest.txt ]]; then
+        cp -- "$_text" "$_temporary/text" && mv -f -- "$_temporary/text" "$_directory/$_digest.txt"
+    fi
+    if [[ ! -e $_directory/$_digest.name.txt ]]; then
+        printf '%s\n' "$_name" > "$_temporary/name" && mv -f -- "$_temporary/name" "$_directory/$_digest.name.txt"
+    fi
+    _store_digest=$_digest
+}
 # Store a license text deduplicated by SHA-256 and record it as the version's license artifact.
 record_license() {
     local name=$1 version=$2 text=$3 license=$4 digest
-    digest=$(python3 "$_installer_library_dir/license_store.py" store "$toolshed_root" "$text" "$license") ||
-        _installer_fail "Cannot store license for $name."
+    store_license "$text" "$license" digest
     record_checksums "$name" "$version/license" "$digest"
 }
 # Record the license of the loaded tool: a tool_license hook, or the repository's license file at the tag.
@@ -116,7 +131,7 @@ discover_tool() {
     host=$(platform_string)
     read -ra platforms <<< "${tool[platforms]}"
     [[ " ${platforms[*]} " == *" $host "* ]] || _installer_fail "$name discovery supports ${platforms[*]} only."
-    _installer_require python3 sha256sum tar
+    _installer_require python3 jq sha256sum tar
     stage_directory staging
     declare -gA discovered=()
     if has_hook tool_latest; then
@@ -157,16 +172,9 @@ maven_latest() {
     local line=$1 staging=$2 current url published actual
     _installer_require sha512sum
     _installer_download https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/maven-metadata.xml "$staging/metadata.xml"
-    version=$(python3 - "$staging/metadata.xml" "$line" <<'PY'
-import re, sys, xml.etree.ElementTree as ET
-root = ET.parse(sys.argv[1]).getroot()
-line = sys.argv[2]
-versions = [v.text for v in root.findall('./versioning/versions/version') if v.text and re.fullmatch(re.escape(line) + r'\.(0|[1-9][0-9]*)', v.text)]
-if not versions:
-    sys.exit('No stable Maven release found for ' + line)
-print(max(versions, key=lambda v: int(v.rsplit('.', 1)[1])))
-PY
-    ) || _installer_fail 'Cannot determine Maven release.'
+    version=$(grep -oE "<version>${line//./\\.}\.(0|[1-9][0-9]*)</version>" "$staging/metadata.xml" |
+        sed -E 's#</?version>##g' | sort -t. -k3,3n | tail -n 1)
+    [[ $version ]] || _installer_fail "No stable Maven release found for $line."
     current=$(read_version_pin "${tool[name]}")
     [[ $current == "$line."* ]] || _installer_fail 'Invalid Maven release line in pin.'
     (( ${version##*.} >= ${current##*.} )) || _installer_fail 'Release metadata would downgrade the Maven pin.'

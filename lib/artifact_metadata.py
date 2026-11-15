@@ -5,7 +5,6 @@ import datetime
 import io
 import os
 import re
-import sys
 import tempfile
 from pathlib import Path
 
@@ -80,14 +79,3 @@ def record_artifact(path, version, artifact, sha256, discovered_at):
             os.unlink(temporary)
     return row
 
-
-if __name__ == '__main__':
-    if len(sys.argv) != 5 or sys.argv[1] != 'checksum':
-        raise SystemExit('Usage: artifact_metadata.py checksum FILE VERSION ARTIFACT')
-    try:
-        record = read_artifacts(sys.argv[2])[(sys.argv[3], sys.argv[4])]
-        if not record['sha256']:
-            raise ValueError('missing artifact SHA-256')
-        print(record['sha256'])
-    except (OSError, KeyError, ValueError) as error:
-        raise SystemExit(f'Cannot select artifact checksum: {error}') from error

@@ -78,8 +78,9 @@ select_install_version() {
 
 artifact_checksum() {
     local tool=$1 version=$2 artifact=$3
-    python3 "$_installer_library_dir/artifact_metadata.py" checksum \
-        "$_installer_library_dir/../metadata/artifacts/$tool.psv" "$version" "$artifact"
+    awk -F'|' -v v="$version" -v a="$artifact" '$1 == v && $2 == a {n++; d = $3}
+        END {if (n != 1 || d !~ /^[0-9a-f]{64}$/) exit 1; print d}' "$_installer_library_dir/../metadata/artifacts/$tool.psv" ||
+        { printf 'Cannot select artifact checksum: %s %s %s\n' "$tool" "$version" "$artifact" >&2; return 1; }
 }
 
 load_archive_checksum() {
@@ -232,21 +233,13 @@ download_signed_manifest() {
 
 # Read a checksum only after authenticating the manifest with its pinned key.
 manifest_checksum() {
-    _installer_require python3
-    python3 - "$1" "$2" "$3" <<'PYTHON'
-import json
-import re
-import sys
-
-with open(sys.argv[1]) as f:
-    manifest = json.load(f)
-if manifest["version"] != sys.argv[2]:
-    sys.exit("Error: Signed manifest version does not match the requested release.")
-checksum = manifest["platforms"][sys.argv[3]]["checksum"]
-if not re.fullmatch(r"[0-9a-f]{64}", checksum):
-    sys.exit("Error: Invalid SHA-256 in signed manifest.")
-print(checksum)
-PYTHON
+    local checksum
+    _installer_require jq
+    [[ $(jq -r .version "$1") == "$2" ]] ||
+        _installer_fail 'Signed manifest version does not match the requested release.'
+    checksum=$(jq -r --arg p "$3" '.platforms[$p].checksum // ""' "$1")
+    [[ $checksum =~ ^[0-9a-f]{64}$ ]] || _installer_fail 'Invalid SHA-256 in signed manifest.'
+    printf '%s\n' "$checksum"
 }
 
 stage_executable() {
@@ -322,36 +315,19 @@ install_symlink() {
 
 # Preserve other JSON settings and permissions; replace the file atomically.
 set_json_env() {
-    _installer_require python3 mkdir dirname
-    mkdir -p -- "$(dirname -- "$1")"
-    python3 - "$1" "$2" "$3" <<'PY'
-import json
-import os
-import stat
-import sys
-import tempfile
-
-path, key, value = sys.argv[1:]
-if os.path.exists(path):
-    with open(path) as f:
-        settings = json.load(f)
-    mode = stat.S_IMODE(os.stat(path).st_mode)
-else:
-    settings = {}
-    mode = 0o600
-settings.setdefault("env", {})[key] = value
-
-fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path))
-try:
-    os.fchmod(fd, mode)
-    with os.fdopen(fd, "w") as f:
-        json.dump(settings, f, indent=2)
-        f.write("\n")
-    os.replace(tmp, path)
-finally:
-    if os.path.exists(tmp):
-        os.unlink(tmp)
-PY
+    local path=$1 key=$2 value=$3 directory temporary
+    _installer_require jq mkdir dirname
+    directory=$(dirname -- "$path")
+    mkdir -p -- "$directory"
+    stage_directory temporary "$directory"
+    if [[ -e $path ]]; then
+        jq --arg k "$key" --arg v "$value" '.env[$k] = $v' "$path" > "$temporary/settings.json"
+        chmod --reference="$path" -- "$temporary/settings.json"
+    else
+        jq -n --arg k "$key" --arg v "$value" '{env: {($k): $v}}' > "$temporary/settings.json"
+        chmod 600 -- "$temporary/settings.json"
+    fi || _installer_fail "Cannot update $path."
+    mv -f -- "$temporary/settings.json" "$path"
 }
 
 java_is_installed() {

@@ -42,7 +42,7 @@ tool_install() {
 tool_discover() {
     local version staging name url archive binary
     local -A checksums=()
-    _installer_require python3 tar sha256sum
+    _installer_require python3 jq tar sha256sum
     [[ $(platform_string) == linux-x64 ]] || _installer_fail 'Codex discovery supports Linux x86_64 only.'
     stage_directory staging
     github_release_info openai/codex rust-v "$staging/release"

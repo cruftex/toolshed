@@ -28,23 +28,10 @@ tool_validate() {
 tool_latest() {
     local staging=$1
     _installer_download 'https://go.dev/dl/?mode=json' "$staging/releases.json"
-    read -r version 'discovered[linux-x64]' < <(python3 - "$staging/releases.json" <<'PY'
-import json, re, sys
-with open(sys.argv[1]) as f:
-    releases = json.load(f)
-for release in releases:
-    match = re.fullmatch(r'go(\d+\.\d+\.\d+)', release.get('version', ''))
-    if release.get('stable') and match:
-        version = match.group(1)
-        assets = [a for a in release['files'] if a.get('filename') == f'go{version}.linux-amd64.tar.gz' and a.get('kind') == 'archive']
-        if len(assets) != 1 or not re.fullmatch(r'[0-9a-f]{64}', assets[0].get('sha256', '')):
-            sys.exit('Invalid Go archive metadata')
-        print(version, assets[0]['sha256'])
-        break
-else:
-    sys.exit('No stable Go release found')
-PY
-)
+    _installer_require jq
+    read -r version 'discovered[linux-x64]' < <(jq -r 'first(.[] | select(.stable and (.version | test("^go[0-9]+\\.[0-9]+\\.[0-9]+$"))))
+        | (.version | ltrimstr("go")) as $v | [.files[] | select(.filename == "go\($v).linux-amd64.tar.gz" and .kind == "archive")]
+        | if length == 1 then "\($v) \(.[0].sha256)" else "" end' "$staging/releases.json") || true
     [[ ${version:-} =~ ^[0-9]+\.[0-9]+\.[0-9]+$ && ${discovered[linux-x64]:-} =~ ^[0-9a-f]{64}$ ]] || _installer_fail 'Invalid Go release metadata.'
     provenance_url='https://go.dev/dl/?mode=json'
     provenance_peer="$staging/releases.json.peer"

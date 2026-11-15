@@ -1,12 +1,11 @@
 import hashlib
 from pathlib import Path
 import subprocess
-import sys
 import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / 'lib/license_store.py'
+LIBRARY = ROOT / 'lib/update.sh'
 
 
 class LicenseStoreTests(unittest.TestCase):
@@ -18,7 +17,8 @@ class LicenseStoreTests(unittest.TestCase):
     def store(self, text, name):
         source = self.root / 'source.txt'
         source.write_bytes(text)
-        return subprocess.run([sys.executable, '-I', SCRIPT, 'store', self.root, source, name], capture_output=True, text=True)
+        script = 'source "$1"; toolshed_root=$2; store_license "$3" "$4" digest; printf "%s\\n" "$digest"'
+        return subprocess.run(['bash', '-c', script, '_', LIBRARY, self.root, source, name], capture_output=True, text=True)
 
     def test_store_is_deduplicated_by_content(self):
         digest = hashlib.sha256(b'MIT text\n').hexdigest()
@@ -50,7 +50,7 @@ class LicenseStoreTests(unittest.TestCase):
 
     def test_no_temporary_files_left(self):
         self.store(b'text\n', 'mit')
-        self.assertFalse(list((self.root / 'metadata/license').glob('.license.*')))
+        self.assertEqual(len(list((self.root / 'metadata/license').iterdir())), 2)
 
 
 if __name__ == '__main__':

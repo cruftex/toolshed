@@ -13,17 +13,12 @@ tool_validate() {
 
 tool_latest() {
     local staging=$1
+    local -a matches=()
     _installer_download https://www.oracle.com/java/technologies/downloads/ "$staging/downloads.html"
-    version=$(python3 - "$staging/downloads.html" <<'PY'
-import re, sys
-from pathlib import Path
-html = Path(sys.argv[1]).read_text()
-matches = re.findall(r'<h3\s+id="java25"[^>]*>\s*Java SE Development Kit (25\.\d+\.\d+)(?:\.\d+)* downloads\s*</h3>', html)
-if len(matches) != 1:
-    sys.exit('Cannot identify Oracle Java 25 release')
-print(matches[0])
-PY
-    ) || _installer_fail 'Cannot identify Oracle Java 25 release.'
+    mapfile -t matches < <(grep -zoP '<h3\s+id="java25"[^>]*>\s*Java SE Development Kit \K25\.\d+\.\d+(?=(?:\.\d+)* downloads\s*</h3>)' \
+        "$staging/downloads.html" | tr '\0' '\n')
+    (( ${#matches[@]} == 1 )) || _installer_fail 'Cannot identify Oracle Java 25 release.'
+    version=${matches[0]}
 }
 
 # The Oracle No-Fee Terms and Conditions, reduced to the plain text of the agreement itself.

@@ -4,6 +4,9 @@ Toolshed installs verified, pinned development tools. Installers do not use
 sudo or edit shell profiles. Add `~/.local/bin` (or `TOOLSHED_BIN_DIR` from
 `env`) to your `PATH` to use installed commands.
 
+Requirements: Bash, coreutils, curl, tar, jq and Python 3 (for discovery and
+`shed` reporting).
+
 ## Offline-first installs
 
 Normal installs and `shed update` use verified cached downloads without
