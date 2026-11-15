@@ -1,5 +1,6 @@
 from pathlib import Path
 import hashlib
+import json
 import os
 import shlex
 import shutil
@@ -33,6 +34,7 @@ class ToolshedCommandTests(unittest.TestCase):
             old = bindir / 'bun'
             old.write_text('#!/bin/sh\necho 1.0.0\n')
             old.chmod(0o755)
+            (repo / 'pins/bun').write_text('1.0.0\n')
             binary = b'#!/bin/sh\necho 9.9.9\n'
             archive = cache / 'github.com/oven-sh/bun/releases/download/bun-v9.9.9/bun-linux-x64.zip'
             archive.parent.mkdir(parents=True)
@@ -41,7 +43,23 @@ class ToolshedCommandTests(unittest.TestCase):
             with (repo / 'metadata/bun.sh').open('a') as metadata:
                 metadata.write(f'\nchecksums[archive/9.9.9/linux-x64]={hashlib.sha256(archive.read_bytes()).hexdigest()}\n')
                 metadata.write(f'checksums[binary/9.9.9/linux-x64]={hashlib.sha256(binary).hexdigest()}\n')
+                metadata.write('checksums[archive/1.0.0/linux-x64]=test\nchecksums[binary/1.0.0/linux-x64]=test\n')
+            provenance = repo / 'metadata/provenance/bun.json'
+            provenance.parent.mkdir(exist_ok=True)
+            provenance.write_text(json.dumps({'9.9.9/linux-x64': {'discovered_at': '2999-01-01T00:00:00Z'}}))
             env = dict(os.environ, PATH=f'{commands}:{os.environ["PATH"]}')
+            result = subprocess.run([repo / 'bin/shed', 'update'], cwd=root, env=env,
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual((repo / 'pins/bun').read_text(), '1.0.0\n')
+            self.assertFalse((root / 'network-called').exists())
+            result = subprocess.run([repo / 'bin/shed', 'update', '--delay-days', '0'], cwd=root,
+                                    env=env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual((repo / 'pins/bun').read_text(), '9.9.9\n')
+            old.write_text('#!/bin/sh\necho 1.0.0\n')
+            (repo / 'pins/bun').write_text('1.0.0\n')
+            provenance.write_text(json.dumps({'9.9.9/linux-x64': {'discovered_at': '2000-01-01T00:00:00Z'}}))
             result = subprocess.run([repo / 'bin/shed', 'update'], cwd=root, env=env,
                                     capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
@@ -62,6 +80,9 @@ class ToolshedCommandTests(unittest.TestCase):
         result = subprocess.run([ROOT / 'bin/shed', 'missing'], capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('Usage:', result.stderr)
+        result = subprocess.run([ROOT / 'bin/shed', 'update', '--delay-days', '-1'], capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('non-negative', result.stderr)
 
     def test_installed_and_updates_only_target_installed_tools(self):
         with tempfile.TemporaryDirectory(prefix='shed status ') as tmp:
@@ -80,6 +101,9 @@ class ToolshedCommandTests(unittest.TestCase):
             with (repo / 'metadata/bun.sh').open('a') as metadata:
                 metadata.write('\nchecksums[archive/2.0.0/linux-x64]=test\nchecksums[binary/2.0.0/linux-x64]=test\n')
                 metadata.write('checksums[archive/3.0.0/linux-x64]=test\nchecksums[binary/3.0.0/linux-x64]=test\n')
+            provenance = repo / 'metadata/provenance/bun.json'
+            provenance.parent.mkdir(exist_ok=True)
+            provenance.write_text(json.dumps({'3.0.0/linux-x64': {'discovered_at': '2000-01-01T00:00:00Z'}}))
             bun = root / 'local bin/bun'
             bun.write_text('#!/bin/sh\necho 1.0.0\n')
             bun.chmod(0o755)

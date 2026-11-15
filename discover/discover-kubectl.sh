@@ -20,4 +20,5 @@ stage_executable "$archive" binary
 actual=$("$binary" version --client) || _installer_fail 'Cannot execute kubectl.'
 [[ $actual == "Client Version: v$version"$'\n'* || $actual == "Client Version: v$version" ]] || _installer_fail "Unexpected kubectl version: $actual"
 record_checksums kubectl "$version/linux-x64" "$checksum" "$checksum"
+record_provenance "kubectl" "$version/linux-x64" "$url.sha256" "$staging/checksum.peer"
 printf '%s\n' "$version"

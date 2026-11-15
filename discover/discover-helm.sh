@@ -24,4 +24,5 @@ binary_sha=$(sha256sum < "$binary"); binary_sha=${binary_sha%% *}
 actual=$("$binary" version --short) || _installer_fail 'Cannot execute Helm.'
 [[ $actual == "v$version" || $actual == "v$version"+* ]] || _installer_fail "Unexpected Helm version: $actual"
 record_checksums helm "$version/linux-x64" "$checksum" "$binary_sha"
+record_provenance "helm" "$version/linux-x64" "$url.sha256sum" "$staging/checksum.peer"
 printf '%s\n' "$version"

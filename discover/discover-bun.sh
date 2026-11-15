@@ -18,4 +18,5 @@ extract_zip_member "$archive" bun-linux-x64/bun binary
 binary_sha=$(sha256sum < "$binary"); binary_sha=${binary_sha%% *}
 verify_version "$binary" "$version"
 record_checksums bun "$version/linux-x64" "$archive_sha" "$binary_sha"
+record_provenance "bun" "$version/linux-x64" "https://api.github.com/repos/oven-sh/bun/releases/latest" "$staging/release.json.peer"
 printf "%s\n" "$version"

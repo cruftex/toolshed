@@ -94,12 +94,22 @@ uses its own bundled Maven and does not enable the Maven Build Cache Extension.
 
 - `shed installed` shows installed versions and whether a newer release is
   recorded for the current platform. It checks configured locations offline.
-- `shed update` updates installed tools to the newest compatible version already
-  recorded in this checkout, then moves each pin after installation succeeds.
+- `shed update` updates installed tools to the newest compatible version recorded
+  at least eight days ago, then moves each pin after installation succeeds. Use
+  `shed update --delay-days 0` for immediate uptake or specify another number
+  of days. The current pin remains eligible, including for repairs.
 - `shed discover` first pulls the checkout's upstream changes using a fast-forward
   only pull, then checks the internet for releases, verifies and caches them,
   and records their metadata. It does not install them or change pins; tools
   without an updater are reported and skipped. Discovery stops if the pull fails.
+
+Successful discovery records the first verification time, checksum source URL,
+effective URL, and connected peer IP in `metadata/provenance/`, per version and
+platform. The IP is the network peer reported by curl; when a proxy is used it
+may identify the proxy rather than the publisher. Missing values are recorded as
+null. Existing entries without provenance have unknown discovery times and are
+not eligible for delayed updates until rediscovered; `--delay-days 0` permits
+them immediately. Tools without discovery scripts retain their existing pins.
 
 Only tools found in Toolshed’s configured directories are considered. Node
 status lists installed Node 24 versions and compares the newest one. NVM updates

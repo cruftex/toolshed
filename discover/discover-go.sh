@@ -35,4 +35,5 @@ download_verified "$url" "$checksum" "$archive"
 tar -xzf "$archive" -C "$staging" || _installer_fail 'Cannot extract Go archive.'
 verify_go_toolchain "$staging/go" "$version"
 [[ ${checksums[$key]+present} ]] || printf '\nchecksums[%s]=%s\n' "$key" "$checksum" >> "$root/metadata/go.sh"
+record_provenance "go" "$version/linux-x64" "https://go.dev/dl/?mode=json" "$staging/releases.json.peer"
 printf '%s\n' "$version"

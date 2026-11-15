@@ -12,7 +12,12 @@ case ${1:-} in
         [[ $# == 1 ]] || { printf 'Usage: shed available\n' >&2; exit 2; }
         exec "$root/list-tools.sh"
         ;;
-    installed|update|discover)
+    update)
+        shift
+        source "$root/env"
+        exec python3 "$root/lib/shed.py" update "$TOOLSHED_BIN_DIR" "$TOOLSHED_OPT_DIR" "$TOOLSHED_NVM_DIR" "$@"
+        ;;
+    installed|discover)
         [[ $# == 1 ]] || { printf 'Usage: shed %s\n' "$1" >&2; exit 2; }
         if [[ $1 == discover ]]; then
             printf 'Updating Toolshed checkout...\n'
@@ -21,6 +26,6 @@ case ${1:-} in
         source "$root/env"
         exec python3 "$root/lib/shed.py" "$1" "$TOOLSHED_BIN_DIR" "$TOOLSHED_OPT_DIR" "$TOOLSHED_NVM_DIR"
         ;;
-    -h|--help|'') printf 'Usage: shed {available|installed|update|discover}\n' ;;
+    -h|--help|'') printf 'Usage: shed {available|installed|update [--delay-days DAYS]|discover}\n' ;;
     *) printf 'Unknown command: %s\nUsage: shed {available|installed|update|discover}\n' "$1" >&2; exit 2 ;;
 esac

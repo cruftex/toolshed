@@ -29,4 +29,7 @@ done
 for name in codex codex-code-mode-host; do
     record_checksums "$name" "$version/linux-x64" "$(cat "$staging/$name.archive-sha256")" "$(cat "$staging/$name.sha256")"
 done
+for name in codex codex-code-mode-host; do
+    record_provenance "$name" "$version/linux-x64" "https://api.github.com/repos/openai/codex/releases/latest" "$staging/release.json.peer"
+done
 printf "%s\n" "$version"

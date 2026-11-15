@@ -22,4 +22,5 @@ touch "$registry"
 if ! grep -Fxq -- "$version" "$registry"; then
     printf '%s\n' "$version" >> "$registry"
 fi
+record_provenance "claude" "$version/$platform" "$base_url/$version/manifest.json" "$cache/manifest/manifest.json.peer"
 printf '%s\n' "$version"

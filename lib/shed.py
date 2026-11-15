@@ -2,6 +2,9 @@
 """Report and update tools installed in Toolshed's configured locations."""
 import os
 import hashlib
+import argparse
+import datetime
+import json
 from pathlib import Path
 import re
 import subprocess
@@ -11,6 +14,11 @@ import tempfile
 root = Path(__file__).resolve().parent.parent
 bin_dir, opt_dir, nvm_dir = map(Path, sys.argv[2:5])
 command = sys.argv[1]
+parser = argparse.ArgumentParser(prog='shed update')
+parser.add_argument('--delay-days', type=int, default=8, metavar='DAYS')
+args = parser.parse_args(sys.argv[5:])
+if args.delay_days < 0:
+    parser.error('--delay-days must be non-negative')
 version_re = re.compile(r'(?<![\d.])(\d+\.\d+\.\d+)(?![\d.])')
 node_versions = []
 
@@ -141,8 +149,34 @@ for key in "${!archive_sha256[@]}"; do printf 'archive/%s\\n' "$key"; done'''
         return []
 
 
-def target(name):
+def target(name, delay_days=None):
     versions = recorded_versions(name)
+    if delay_days is not None and delay_days > 0:
+        pin = (root / 'pins' / name).read_text().strip()
+        try:
+            platform = subprocess.run([str(root / 'lib/platform.sh')], capture_output=True,
+                                      text=True, check=True).stdout.strip()
+            if name == 'vegeta':
+                platform = platform.replace('linux-', 'linux_').replace('darwin-', 'darwin_').replace('x64', 'amd64').replace('aarch64', 'arm64')
+            if name == 'claude':
+                platform = platform.replace('aarch64', 'arm64')
+            provenance = json.loads((root / 'metadata/provenance' / f'{name}.json').read_text())
+        except (OSError, subprocess.CalledProcessError, ValueError):
+            provenance = {}
+            platform = ''
+        cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=delay_days)
+        eligible = []
+        for version in versions:
+            if version == pin:
+                eligible.append(version)
+                continue
+            try:
+                stamp = datetime.datetime.fromisoformat(provenance[f'{version}/{platform}']['discovered_at'].replace('Z', '+00:00'))
+                if stamp.tzinfo is not None and stamp <= cutoff:
+                    eligible.append(version)
+            except (KeyError, TypeError, ValueError):
+                continue
+        versions = eligible
     return max(versions, key=version_tuple) if versions else None
 
 
@@ -186,7 +220,7 @@ elif command in ('update', 'discover'):
             failures = True
             continue
         if command == 'update':
-            known = target(name)
+            known = target(name, args.delay_days)
             if known is None:
                 print(f'{name}: no compatible recorded version; skipped', file=sys.stderr)
                 failures = True
@@ -198,7 +232,7 @@ elif command in ('update', 'discover'):
             if comparison == 'no' and (root / 'pins' / name).read_text().strip() == known:
                 print(f'{name}: {version} is current')
                 continue
-            if name == 'node24' and installed.get('nvm') != target('nvm'):
+            if name == 'node24' and installed.get('nvm') != target('nvm', args.delay_days):
                 print('node24: configured NVM version must be repaired or upgraded first; skipped', file=sys.stderr)
                 failures = True
                 continue

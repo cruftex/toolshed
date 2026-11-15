@@ -36,6 +36,7 @@ while (($#)); do
  shift
 done
 if [[ $url == */latest ]]; then cp "$FIXTURE/release.json" "$out"; else cp "$FIXTURE/bun-linux-x64.zip" "$out"; fi
+printf '192.0.2.10\\n%s\\n' "${url%/latest}/redirected"
 ''')
             curl.chmod(0o755)
             env = dict(os.environ, PATH=f'{commands}:{os.environ["PATH"]}', FIXTURE=str(root))
@@ -50,6 +51,10 @@ if [[ $url == */latest ]]; then cp "$FIXTURE/release.json" "$out"; else cp "$FIX
             self.assertEqual(metadata.count('archive/1.5.0/linux-x64'), 1)
             self.assertEqual(metadata.count('binary/1.5.0/linux-x64'), 1)
             self.assertRegex(metadata, r'# Discovered at \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\nchecksums\[archive/1\.5\.0/linux-x64\]=[^\n]+\nchecksums\[binary/1\.5\.0/linux-x64\]=')
+            provenance = json.loads((repo / 'metadata/provenance/bun.json').read_text())['1.5.0/linux-x64']
+            self.assertEqual(provenance['peer_ip'], '192.0.2.10')
+            self.assertEqual(provenance['checksum_url'], 'https://api.github.com/repos/oven-sh/bun/releases/latest')
+            self.assertEqual(provenance['effective_url'], 'https://api.github.com/repos/oven-sh/bun/releases/redirected')
 
     def test_kubernetes_discovery_and_install_from_cache(self):
         with tempfile.TemporaryDirectory(prefix='kubernetes discovery ') as temp:

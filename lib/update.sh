@@ -1,5 +1,13 @@
 #!/usr/bin/env bash
 # Shared helpers for explicit release updates. The caller sources install.sh.
+_toolshed_capture_peer=1
+
+# Record the first successful verification, without inventing historical provenance.
+record_provenance() {
+    local name=$1 key=$2 source_url=$3 peer_file=$4
+    python3 "$_installer_library_dir/provenance.py" \
+        "$_installer_library_dir/../metadata/provenance/$name.json" "$key" "$source_url" "$peer_file"
+}
 release_info() {
     local repository=$1 tag_prefix=$2 output=$3
     _installer_download "https://api.github.com/repos/$repository/releases/latest" "$output.json"
@@ -90,6 +98,7 @@ PY
     if [[ ! ${archive_sha256[$key]+present} ]]; then
         printf '\narchive_sha256[%s]=%s\n' "$key" "$digest" >> "$_installer_library_dir/../metadata/maven.sh"
     fi
+    record_provenance "$pin" "$key" "$url.sha512" "$staging/checksum.peer"
     printf '%s\n' "$version"
 }
 
@@ -120,5 +129,6 @@ discover_release_binary() {
     binary_sha=$(sha256sum < "$binary"); binary_sha=${binary_sha%% *}
     validate_release_binary "$name" "$version" "$binary"
     record_checksums "$name" "$version/linux-x64" "$checksum" "$binary_sha"
+    record_provenance "$name" "$version/linux-x64" "https://api.github.com/repos/$repo/releases/latest" "$staging/release.json.peer"
     printf '%s\n' "$version"
 }

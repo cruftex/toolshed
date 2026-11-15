@@ -123,8 +123,15 @@ download_verified() {
 
 _installer_download() {
     _installer_require curl
-    curl --fail --location --silent --show-error --proto '=https' --proto-redir '=https' \
-        --connect-timeout 15 --max-time 600 "$1" --output "$2"
+    if [[ ${_toolshed_capture_peer:-} == 1 ]]; then
+        local peer
+        peer=$(curl --fail --location --silent --show-error --proto '=https' --proto-redir '=https' \
+            --connect-timeout 15 --max-time 600 --write-out '%{remote_ip}\n%{url_effective}\n' "$1" --output "$2") || return
+        printf '%s\n' "$peer" > "$2.peer"
+    else
+        curl --fail --location --silent --show-error --proto '=https' --proto-redir '=https' \
+            --connect-timeout 15 --max-time 600 "$1" --output "$2"
+    fi
 }
 
 # Call directly so the library can clean up the staging directory.

@@ -19,4 +19,5 @@ stage_executable "$archive" binary
 actual=$("$binary" version) || _installer_fail 'Cannot execute kind.'
 [[ $actual == "kind v$version "* ]] || _installer_fail "Unexpected kind version: $actual"
 record_checksums kind "$version/linux-x64" "$checksum" "$checksum"
+record_provenance "kind" "$version/linux-x64" "https://api.github.com/repos/kubernetes-sigs/kind/releases/latest" "$staging/release.json.peer"
 printf '%s\n' "$version"

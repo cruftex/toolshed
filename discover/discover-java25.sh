@@ -32,4 +32,5 @@ key="archive/$version/linux-x64"
 if [[ ! ${checksums[$key]+present} ]]; then
     printf '\nchecksums[%s]=%s\n' "$key" "$checksum" >> "$root/metadata/java25.sh"
 fi
+record_provenance "java25" "$version/linux-x64" "$url.sha256" "$staging/checksum.peer"
 printf "%s\n" "$version"

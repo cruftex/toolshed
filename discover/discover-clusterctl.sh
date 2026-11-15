@@ -19,4 +19,5 @@ stage_executable "$archive" binary
 actual=$(CLUSTERCTL_DISABLE_VERSIONCHECK=true "$binary" version -o short) || _installer_fail 'Cannot execute clusterctl.'
 [[ $actual == "v$version"* ]] || _installer_fail "Unexpected clusterctl version: $actual"
 record_checksums clusterctl "$version/linux-x64" "$checksum" "$checksum"
+record_provenance "clusterctl" "$version/linux-x64" "https://api.github.com/repos/kubernetes-sigs/cluster-api/releases/latest" "$staging/release.json.peer"
 printf '%s\n' "$version"
