@@ -24,14 +24,17 @@ class JavaInstallerTests(unittest.TestCase):
         (self.repo / 'env').write_text('\n'.join(f'{key}={shlex.quote(str(value))}' for key, value in [('TOOLSHED_DOWNLOAD_DIR', self.cache), ('TOOLSHED_BIN_DIR', self.bin), ('TOOLSHED_OPT_DIR', self.opt)]) + '\n')
         self.archive = self.root / 'java.tar.gz'
         with tarfile.open(self.archive, 'w:gz') as tar:
-            for name, content in [('java', b'#!/bin/sh\necho "openjdk 25.0.5 2026-10-20"\n'), ('javac', b'#!/bin/sh\necho "javac 25.0.5"\n')]:
-                info = tarfile.TarInfo('jdk-25.0.5+8/bin/' + name)
+            for name, content in [('bin/java', b'#!/bin/sh\necho "openjdk 25.0.5 2026-10-20"\n'), ('bin/javac', b'#!/bin/sh\necho "javac 25.0.5"\n'),
+                                  ('legal/java.base/LICENSE', b'GNU GENERAL PUBLIC LICENSE test text\n')]:
+                info = tarfile.TarInfo('jdk-25.0.5+8/' + name)
                 info.mode = 0o755
                 info.size = len(content)
                 tar.addfile(info, io.BytesIO(content))
         digest = hashlib.sha256(self.archive.read_bytes()).hexdigest()
         artifact_table = self.repo / 'metadata/artifacts/java25.psv'
         artifact_table.write_text(artifact_table.read_text().replace('68982529869257d0ee6b824ec5aa270ff8b118bb438670da0b97ebdab178d7fb', digest))
+        artifact_table.write_text(''.join(row for row in artifact_table.read_text().splitlines(True) if '|/license|' not in row))
+        shutil.rmtree(self.repo / 'metadata/license')
         commands = self.root / 'commands'
         commands.mkdir()
         curl = commands / 'curl'
@@ -77,6 +80,10 @@ esac
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual((self.repo / 'pins/java25').read_text(), '25.0.5\n')
         self.assertFalse((self.bin / 'javac').exists())
+        licenses = list((self.repo / 'metadata/license').glob('*.name.txt'))
+        self.assertEqual(len(licenses), 1)
+        self.assertEqual(licenses[0].read_text(), 'gpl-2.0-classpath\n')
+        self.assertIn('25.0.5|/license|' + licenses[0].name.split('.')[0], (self.repo / 'metadata/artifacts/java25.psv').read_text())
 
     def test_reject_unpinned_version(self):
         (self.repo / 'pins/java25').write_text('25.0.6\n')

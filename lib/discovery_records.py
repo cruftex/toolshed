@@ -15,6 +15,8 @@ def location(root, name, key):
     canonical = canonical.replace('amd64', 'x64').replace('arm64', 'aarch64')
     component = 'host' if name == 'codex-code-mode-host' else ''
     table = 'codex' if component else ('maven' if name in ('maven39', 'maven310') else name)
+    if platform == 'license':
+        return root / 'metadata/artifacts' / f'{table}.psv', version, f'{component}/license'
     kind = 'binary' if name in DIRECT else ('archive/zip' if name == 'bun' else 'archive/tar.gz')
     return root / 'metadata/artifacts' / f'{table}.psv', version, f'{component}/{canonical}/{kind}'
 

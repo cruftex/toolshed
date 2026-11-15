@@ -25,6 +25,7 @@ done < "$staging/checksums"
 while read -r platform archive_sha; do
     record_checksums vegeta "$version/$platform" "$archive_sha"
 done < "$staging/checksums"
+record_github_license vegeta "$version" tsenart/vegeta "v$version" LICENSE mit
 for platform in linux_amd64 linux_arm64 darwin_amd64 darwin_arm64; do
     record_provenance vegeta "$version/$platform" "https://api.github.com/repos/tsenart/vegeta/releases/latest" "$staging/release.json.peer"
 done

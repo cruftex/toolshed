@@ -78,6 +78,17 @@ Toolshed also provides cloud-provider-kind, kubebuilder, controller-gen,
 setup-envtest, golangci-lint, cosign, crane, trivy, and Mike Farah’s yq.
 setup-envtest downloads Kubernetes test assets separately when requested.
 
+## Licenses
+
+Each tool version's license text is stored once in `metadata/license/<sha256>.txt`, with its short name in `<sha256>.name.txt`; the tool's
+`metadata/artifacts/<tool>.psv` lists it as a `/license` row with that SHA-256. For example,
+`awk -F'|' '$2 ~ /license/' metadata/artifacts/oracle-java25.psv` gives the hash, and
+`cat metadata/license/<hash>.name.txt` the name (Oracle JDK uses the Oracle No-Fee Terms and Conditions,
+`oracle-nftc`; Eclipse Temurin uses GPLv2 with the Classpath Exception, `gpl-2.0-classpath`).
+Licenses were backfilled for all current tools from the project's `LICENSE` file at the release tag
+(Claude Code: its `LICENSE.md`, `proprietary`; Bun and Node.js include bundled third-party licenses, `mit+third-party`).
+Discovery records the license automatically (`record_license` in `lib/update.sh`) for every tool that has a discover script; mvnd, Node.js and NVM have none yet.
+
 ## Activation
 
 Most commands are available in `TOOLSHED_BIN_DIR` after installation. Source

@@ -67,6 +67,7 @@ while (($#)); do
  case $1 in https://*) url=$1 ;; --output) out=$2; shift ;; esac
  shift
 done
+[[ $url != https://raw.githubusercontent.com/* ]] || { printf 'license text\n' > "$out"; exit 0; }
 if [[ $url == */latest ]]; then cp "$FIXTURE/release.json" "$out"; else cp "$FIXTURE/bun-linux-x64.zip" "$out"; fi
 printf '192.0.2.10\\n%s\\n' "${url%/latest}/redirected"
 ''')
@@ -104,6 +105,7 @@ while (($#)); do
  case $1 in https://*) url=$1 ;; --output) out=$2; shift ;; esac
  shift
 done
+[[ $url != https://raw.githubusercontent.com/* ]] || { printf 'license text\n' > "$out"; exit 0; }
 if [[ $url == */latest ]]; then cp "$FIXTURE/release.json" "$out"; else cp "$FIXTURE/${url##*/}" "$out"; fi
 """)
             curl.chmod(0o755)
@@ -161,6 +163,7 @@ while (($#)); do
  case $1 in https://*) url=$1 ;; --output) out=$2; shift ;; esac
  shift
 done
+[[ $url != https://raw.githubusercontent.com/* ]] || { printf 'license text\n' > "$out"; exit 0; }
 if [[ $url == */latest ]]; then cp "$FIXTURE/release.json" "$out"; else cp "$FIXTURE/${url##*/}" "$out"; fi
 """)
             curl.chmod(0o755)
@@ -208,6 +211,7 @@ while (($#)); do
  case $1 in https://*) url=$1 ;; --output) out=$2; shift ;; esac
  shift
 done
+[[ $url != https://raw.githubusercontent.com/* ]] || { printf 'license text\n' > "$out"; exit 0; }
 if [[ $url == */latest ]]; then cp "$FIXTURE/release.json" "$out"; else cp "$FIXTURE/${url##*/}" "$out"; fi
 """)
             curl.chmod(0o755)
@@ -262,6 +266,7 @@ while (($#)); do
  case $1 in https://*) url=$1 ;; --output) out=$2; shift ;; esac
  shift
 done
+[[ $url != https://raw.githubusercontent.com/* ]] || { printf 'license text\n' > "$out"; exit 0; }
 if [[ $url == */latest ]]; then cp "$FIXTURE/release.json" "$out"; else cp "$FIXTURE/${url##*/}" "$out"; fi
 ''')
             curl.chmod(0o755)
@@ -269,6 +274,9 @@ if [[ $url == */latest ]]; then cp "$FIXTURE/release.json" "$out"; else cp "$FIX
             old_pin = (repo / 'pins/vegeta').read_text()
             result = subprocess.run([repo / 'discover/discover-vegeta.sh'], cwd=root, env=env, capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('12.14.0|/license|', (repo / 'metadata/artifacts/vegeta.psv').read_text())
+            digest = hashlib.sha256(b'license text\n').hexdigest()
+            self.assertEqual((repo / f'metadata/license/{digest}.name.txt').read_text(), 'mit\n')
             self.assertEqual((repo / 'pins/vegeta').read_text(), old_pin)
             self.assertFalse((root / 'bin/vegeta').exists())
             for platform in ('linux-x64', 'linux-aarch64', 'darwin-x64', 'darwin-aarch64'):

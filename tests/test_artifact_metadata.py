@@ -23,6 +23,8 @@ class ArtifactMetadataTests(unittest.TestCase):
                 records = metadata.read_artifacts(repo / 'metadata/artifacts' / f'{tool}.psv')
                 for (version, artifact), row in records.items():
                     parts = artifact.split('/')
+                    if parts[-1] == 'license':
+                        continue
                     legacy_name = 'codex-code-mode-host' if tool == 'codex' and parts[0] == 'host' else tool
                     platform = parts[1]
                     if tool == 'vegeta':
@@ -55,6 +57,19 @@ class ArtifactMetadataTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'conflicting'):
                 metadata.record_artifact(path, '1.2.3', '/linux-x64/binary', 'b' * 64, '')
             self.assertEqual(path.read_bytes(), before)
+
+    def test_license_artifacts_per_component(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'tool.psv'
+            for artifact, digest in (('/license', 'a' * 64), ('host/license', 'b' * 64)):
+                metadata.record_artifact(path, '1.2.3', artifact, digest, '2026-01-01T00:00:00Z')
+            records = metadata.read_artifacts(path)
+            self.assertEqual(records[('1.2.3', '/license')]['sha256'], 'a' * 64)
+            self.assertEqual(records[('1.2.3', 'host/license')]['sha256'], 'b' * 64)
+            with self.assertRaisesRegex(ValueError, 'conflicting'):
+                metadata.record_artifact(path, '1.2.3', '/license', 'c' * 64, '')
+            with self.assertRaisesRegex(ValueError, 'invalid artifact key'):
+                metadata.record_artifact(path, '1.2.3', '/licenses', 'a' * 64, '')
 
     def test_records_and_duplicate_rejection(self):
         with tempfile.TemporaryDirectory() as tmp:

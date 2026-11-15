@@ -43,6 +43,13 @@ use repository-recorded verification metadata, or Claude's signed manifest.
   verified files. Fail without replacing installed executables on download,
   checksum, extraction, or version-check errors.
 
+## Licenses
+
+- Record each tool's license text as a `/license` artifact (`<component>/license` for extra components) in
+  `metadata/artifacts/<tool>.psv`; discovery does this with `record_license` in `lib/update.sh`. The text is stored
+  once as `metadata/license/<sha256>.txt`, with its short name (lowercase SPDX-style, for example `apache-2.0`,
+  `gpl-2.0-classpath`, `oracle-nftc`) in `<sha256>.name.txt`. A changed license text for a recorded version fails discovery.
+
 ## Installer conventions
 
 - Put executable Bash installers in `install/`, named `install-<tool>.sh`, with

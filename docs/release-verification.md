@@ -4,6 +4,9 @@
 
 ### Eclipse Temurin Java 25 (`java25`)
 
+License: GPLv2 with the Classpath Exception, from the archive's `legal/java.base/LICENSE`, stored as
+`metadata/license/4b9abebc….txt` (name in `4b9abebc….name.txt`).
+
 `./install/install-java25.sh` installs Eclipse Temurin 25.0.5+8 (Linux x86_64, glibc) under
 `$TOOLSHED_OPT_DIR/java25/25.0.5` and links its tools into `TOOLSHED_BIN_DIR`. The
 [archive](https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.5%2B8/OpenJDK25U-jdk_x64_linux_hotspot_25.0.5_8.tar.gz)
@@ -13,6 +16,9 @@ the second run skipped the matching installation. The build number is pinned in 
 `./discover/discover-java25.sh` reads Adoptium's latest-release API and records the digest without moving the pin.
 
 ### Oracle JDK 25 (`oracle-java25`)
+
+License: Oracle No-Fee Terms and Conditions (NFTC), stored as `metadata/license/df43f6a3….txt` (name in `df43f6a3….name.txt`)
+(plain-text extraction of Oracle's page, last updated 12 September 2021, fetched 2026-11-15). The installer prints it.
 
 Run `./install/install-oracle-java25.sh` to install Oracle JDK 25.0.5 on Linux
 x86_64 with glibc. The installer verifies the version-specific archive against

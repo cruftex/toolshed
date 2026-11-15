@@ -41,6 +41,7 @@ while (($#)); do
  case $1 in https://*) url=$1 ;; --output) out=$2; shift ;; esac
  shift
 done
+[[ $url != https://raw.githubusercontent.com/* ]] || { printf 'license text\n' > "$out"; exit 0; }
 if [[ $url == *'?'* ]]; then cp "$FIXTURE/release.json" "$out"; else cp "$FIXTURE/${url##*/}" "$out"; fi
 ''')
             curl.chmod(0o755)

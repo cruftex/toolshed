@@ -27,6 +27,9 @@ for name in codex codex-code-mode-host; do
     record_checksums "$name" "$version/linux-x64" "$(cat "$staging/$name.archive-sha256")"
 done
 for name in codex codex-code-mode-host; do
+    record_github_license "$name" "$version" openai/codex "rust-v$version" LICENSE apache-2.0
+done
+for name in codex codex-code-mode-host; do
     record_provenance "$name" "$version/linux-x64" "https://api.github.com/repos/openai/codex/releases/latest" "$staging/release.json.peer"
 done
 printf "%s\n" "$version"

@@ -21,5 +21,6 @@ chmod 755 -- "$binary"
 actual=$("$binary" version --short) || _installer_fail 'Cannot execute Helm.'
 [[ $actual == "v$version" || $actual == "v$version"+* ]] || _installer_fail "Unexpected Helm version: $actual"
 record_checksums helm "$version/linux-x64" "$checksum"
+record_github_license helm "$version" helm/helm "v$version" LICENSE apache-2.0
 record_provenance "helm" "$version/linux-x64" "$url.sha256sum" "$staging/checksum.peer"
 printf '%s\n' "$version"

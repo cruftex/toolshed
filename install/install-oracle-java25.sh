@@ -21,3 +21,5 @@ if ! java_is_installed "$jdk_home" "$version"; then
     mv -T -- "$staging/jdk-$version" "$jdk_home"
 fi
 printf 'Java %s is installed in %s\n' "$version" "$jdk_home"
+license=$(artifact_checksum oracle-java25 "$version" /license) &&
+    printf 'Oracle license: %s (text: metadata/license/%s.txt)\n' "$(cat "$_installer_library_dir/../metadata/license/$license.name.txt")" "$license" || true

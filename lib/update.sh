@@ -47,6 +47,21 @@ record_checksums() {
     check_recorded_checksums "$name" "$key" "$archive"
     python3 "$_installer_library_dir/discovery_records.py" record "$_installer_library_dir/.." "$name" "$key" "$archive" "$_discovery_timestamp"
 }
+# Store a license text deduplicated by SHA-256 and record it as the version's license artifact.
+record_license() {
+    local name=$1 version=$2 text=$3 license=$4 digest
+    digest=$(python3 "$_installer_library_dir/license_store.py" store "$_installer_library_dir/.." "$text" "$license") ||
+        _installer_fail "Cannot store license for $name."
+    record_checksums "$name" "$version/license" "$digest"
+}
+# Fetch a project's license file from its repository at the release tag and record it.
+record_github_license() {
+    local name=$1 version=$2 repo=$3 tag=$4 file=$5 license=$6 staging
+    stage_directory staging
+    _installer_download "https://raw.githubusercontent.com/$repo/$tag/$file" "$staging/license.txt" ||
+        _installer_fail "Cannot download the $name license."
+    record_license "$name" "$version" "$staging/license.txt" "$license"
+}
 write_version_pin() {
     local name=$1 value=$2
     printf '%s\n' "$value" > "$_installer_library_dir/../pins/.$name.tmp"
@@ -91,6 +106,7 @@ PY
     archive=$(cache_path "$url")
     download_verified "$url" "$digest" "$archive"
     record_checksums "$pin" "$key" "$digest"
+    record_github_license "$pin" "$version" apache/maven "maven-$version" LICENSE apache-2.0
     record_provenance "$pin" "$key" "$url.sha512" "$staging/checksum.peer"
     printf '%s\n' "$version"
 }
@@ -127,6 +143,7 @@ discover_github_release_binary() {
     fi
     validate_tool_binary "$binary" "$version"
     record_checksums "$name" "$version/linux-x64" "$checksum"
+    record_github_license "$name" "$version" "$repo" "$tag_prefix$version" "${release_license_file:-LICENSE}" "${release_license_name:?Missing release_license_name}"
     record_provenance "$name" "$version/linux-x64" "https://api.github.com/repos/$repo/releases/latest" "$staging/release.json.peer"
     printf '%s\n' "$version"
 }

@@ -32,6 +32,8 @@ class JavaInstallerTests(unittest.TestCase):
         digest = hashlib.sha256(self.archive.read_bytes()).hexdigest()
         artifact_table = self.repo / 'metadata/artifacts/oracle-java25.psv'
         artifact_table.write_text(artifact_table.read_text().replace('8748e3837bbceabfa17548564b6d814d123bd820e947e30dff885202b6f24f2c', digest))
+        artifact_table.write_text(''.join(row for row in artifact_table.read_text().splitlines(True) if '|/license|' not in row))
+        shutil.rmtree(self.repo / 'metadata/license')
         commands = self.root / 'commands'
         commands.mkdir()
         curl = commands / 'curl'
@@ -42,6 +44,7 @@ while (($#)); do
 done
 case $url in
  */downloads/) printf '<h3 id="java25">Java SE Development Kit 25.0.5.0.3 downloads</h3>' > "$out" ;;
+ */no-fee-license.html) printf '<html><body><p>chrome</p><p>Your use of this Program is governed by the No-Fee Terms.</p><h2>Oracle No-Fee Terms and Conditions (NFTC)</h2><p>Terms.</p><p>Last updated: 12 September 2021</p><p>&copy; 2026 Oracle</p></body></html>' > "$out" ;;
  *.sha256) printf '%s' "$TEST_DIGEST" > "$out" ;;
  *) cp "$TEST_ARCHIVE" "$out" ;;
 esac
@@ -77,6 +80,14 @@ esac
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual((self.repo / 'pins/oracle-java25').read_text(), '25.0.5\n')
         self.assertFalse((self.bin / 'javac').exists())
+        rows = (self.repo / 'metadata/artifacts/oracle-java25.psv').read_text()
+        self.assertIn('25.0.5|/license|', rows)
+        licenses = list((self.repo / 'metadata/license').glob('*.name.txt'))
+        self.assertEqual(len(licenses), 1)
+        self.assertEqual(licenses[0].name.split('.')[0], hashlib.sha256(licenses[0].with_name(licenses[0].name.split('.')[0] + '.txt').read_bytes()).hexdigest())
+        self.assertIn(licenses[0].name.split('.')[0], rows)
+        self.assertEqual(licenses[0].read_text(), 'oracle-nftc\n')
+        self.assertNotIn('2026 Oracle', licenses[0].with_name(licenses[0].name.split('.')[0] + '.txt').read_text())
 
     def test_reject_unpinned_version(self):
         (self.repo / 'pins/oracle-java25').write_text('25.0.6\n')

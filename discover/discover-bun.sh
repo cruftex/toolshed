@@ -15,5 +15,6 @@ download_verified "$url" "$archive_sha" "$archive"
 extract_zip_member "$archive" bun-linux-x64/bun binary
 verify_version "$binary" "$version"
 record_checksums bun "$version/linux-x64" "$archive_sha"
+record_github_license bun "$version" oven-sh/bun "bun-v$version" LICENSE.md 'mit+third-party'
 record_provenance "bun" "$version/linux-x64" "https://api.github.com/repos/oven-sh/bun/releases/latest" "$staging/release.json.peer"
 printf "%s\n" "$version"

@@ -31,6 +31,8 @@ download_verified "$url" "$checksum" "$archive"
 tar -xzf "$archive" -C "$staging" || _installer_fail 'Cannot extract Java archive.'
 java_is_installed "$staging/jdk-$version+$build" "$version" || _installer_fail "Java $version validation failed."
 record_checksums java25 "$key" "$checksum"
+tar -xzOf "$archive" "jdk-$version+$build/legal/java.base/LICENSE" > "$staging/license.txt" || _installer_fail 'Cannot extract Java license.'
+record_license java25 "$version" "$staging/license.txt" gpl-2.0-classpath
 grep -qxF "$version $build" "$root/metadata/java25-builds" || printf '%s %s\n' "$version" "$build" >> "$root/metadata/java25-builds"
 record_provenance java25 "$key" "$api" "$staging/release.json.peer"
 printf '%s\n' "$version"
