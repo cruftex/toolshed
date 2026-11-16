@@ -1,0 +1,8 @@
+{
+  "25.0.5/linux-x64": {
+    "checksum_url": "https://download.oracle.com/java/25/archive/jdk-25.0.5_linux-x64_bin.tar.gz.sha256",
+    "discovered_at": "2026-11-16T11:53:28Z",
+    "effective_url": "https://download.oracle.com/java/25/archive/jdk-25.0.5_linux-x64_bin.tar.gz.sha256",
+    "peer_ip": "23.0.192.118"
+  }
+}
