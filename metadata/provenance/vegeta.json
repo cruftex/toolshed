@@ -1,4 +1,16 @@
 {
+  "12.13.0/darwin-aarch64": {
+    "checksum_url": "https://api.github.com/repos/tsenart/vegeta/releases/latest",
+    "discovered_at": "2026-11-14T04:46:36Z",
+    "effective_url": "https://api.github.com/repos/tsenart/vegeta/releases/latest",
+    "peer_ip": "20.29.134.17"
+  },
+  "12.13.0/darwin-x64": {
+    "checksum_url": "https://api.github.com/repos/tsenart/vegeta/releases/latest",
+    "discovered_at": "2026-11-14T04:46:33Z",
+    "effective_url": "https://api.github.com/repos/tsenart/vegeta/releases/latest",
+    "peer_ip": "20.29.134.17"
+  },
   "12.13.0/darwin_amd64": {
     "cache_path": "github.com/tsenart/vegeta/releases/download/v12.13.0/vegeta_12.13.0_darwin_amd64.tar.gz",
     "checksum_url": null,
@@ -14,6 +26,18 @@
     "effective_url": null,
     "peer_ip": null,
     "timestamp_source": "cache_mtime"
+  },
+  "12.13.0/linux-aarch64": {
+    "checksum_url": "https://api.github.com/repos/tsenart/vegeta/releases/latest",
+    "discovered_at": "2026-11-14T04:46:26Z",
+    "effective_url": "https://api.github.com/repos/tsenart/vegeta/releases/latest",
+    "peer_ip": "20.29.134.17"
+  },
+  "12.13.0/linux-x64": {
+    "checksum_url": "https://api.github.com/repos/tsenart/vegeta/releases/latest",
+    "discovered_at": "2026-11-14T04:46:22Z",
+    "effective_url": "https://api.github.com/repos/tsenart/vegeta/releases/latest",
+    "peer_ip": "20.29.134.17"
   },
   "12.13.0/linux_amd64": {
     "cache_path": "github.com/tsenart/vegeta/releases/download/v12.13.0/vegeta_12.13.0_linux_amd64.tar.gz",
