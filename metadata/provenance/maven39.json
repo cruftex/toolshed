@@ -1,0 +1,8 @@
+{
+  "3.9.16/linux-x64": {
+    "checksum_url": "https://archive.apache.org/dist/maven/maven-3/3.9.16/binaries/apache-maven-3.9.16-bin.tar.gz.sha512",
+    "discovered_at": "2026-11-16T11:51:49Z",
+    "effective_url": "https://archive.apache.org/dist/maven/maven-3/3.9.16/binaries/apache-maven-3.9.16-bin.tar.gz.sha512",
+    "peer_ip": "65.108.204.189"
+  }
+}
