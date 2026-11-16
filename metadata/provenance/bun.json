@@ -1,10 +1,11 @@
 {
   "1.4.4/linux-x64": {
     "cache_path": "github.com/oven-sh/bun/releases/download/bun-v1.4.4/bun-linux-x64.zip",
-    "checksum_url": null,
+    "checksum_url": "https://api.github.com/repos/oven-sh/bun/releases/latest",
     "discovered_at": "2026-11-14T04:42:03Z",
-    "effective_url": null,
-    "peer_ip": null,
+    "effective_url": "https://api.github.com/repos/oven-sh/bun/releases/latest",
+    "peer_ip": "20.29.134.17",
+    "peer_observed_at": "2026-11-16T11:47:42Z",
     "timestamp_source": "cache_mtime"
   }
 }
