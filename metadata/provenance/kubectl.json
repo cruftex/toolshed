@@ -1,0 +1,8 @@
+{
+  "1.37.2/linux-x64": {
+    "checksum_url": "https://dl.k8s.io/release/v1.37.2/bin/linux/amd64/kubectl.sha256",
+    "discovered_at": "2026-11-16T11:48:07Z",
+    "effective_url": "https://dl.k8s.io/release/v1.37.2/bin/linux/amd64/kubectl.sha256",
+    "peer_ip": "151.101.1.91"
+  }
+}
