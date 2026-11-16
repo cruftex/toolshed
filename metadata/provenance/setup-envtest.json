@@ -1,0 +1,8 @@
+{
+  "0.25.3/linux-x64": {
+    "checksum_url": "https://api.github.com/repos/kubernetes-sigs/controller-runtime/releases/latest",
+    "discovered_at": "2026-11-16T11:53:34Z",
+    "effective_url": "https://api.github.com/repos/kubernetes-sigs/controller-runtime/releases/latest",
+    "peer_ip": "20.29.134.17"
+  }
+}
