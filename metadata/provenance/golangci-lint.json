@@ -1,0 +1,8 @@
+{
+  "2.15.0/linux-x64": {
+    "checksum_url": "https://api.github.com/repos/golangci/golangci-lint/releases/latest",
+    "discovered_at": "2026-11-16T11:47:58Z",
+    "effective_url": "https://api.github.com/repos/golangci/golangci-lint/releases/latest",
+    "peer_ip": "20.29.134.17"
+  }
+}
