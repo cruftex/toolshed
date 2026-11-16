@@ -1,10 +1,11 @@
 {
   "2.1.325/linux-x64": {
     "cache_path": "downloads.claude.ai/claude-code-releases/2.1.325/linux-x64/claude",
-    "checksum_url": null,
+    "checksum_url": "https://downloads.claude.ai/claude-code-releases/2.1.325/manifest.json",
     "discovered_at": "2026-11-14T04:44:41Z",
-    "effective_url": null,
-    "peer_ip": null,
+    "effective_url": "https://downloads.claude.ai/claude-code-releases/2.1.325/manifest.json",
+    "peer_ip": "35.190.46.17",
+    "peer_observed_at": "2026-11-16T11:47:45Z",
     "timestamp_source": "cache_mtime"
   }
 }
