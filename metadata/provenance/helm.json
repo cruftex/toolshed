@@ -1,0 +1,8 @@
+{
+  "4.3.2/linux-x64": {
+    "checksum_url": "https://get.helm.sh/helm-v4.3.2-linux-amd64.tar.gz.sha256sum",
+    "discovered_at": "2026-11-16T11:47:59Z",
+    "effective_url": "https://get.helm.sh/helm-v4.3.2-linux-amd64.tar.gz.sha256sum",
+    "peer_ip": "150.171.110.151"
+  }
+}
