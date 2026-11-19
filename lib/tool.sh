@@ -197,6 +197,7 @@ install_bin_tool() {
     link_tool_entries ''
     printf '%s %s is installed in %s\n' "$name" "$version" "$TOOLSHED_BIN_DIR"
     print_tool_license "$version"
+    ! has_hook tool_after_install || tool_after_install "$version"
 }
 
 # Install a multi-file package into its versioned home; an existing home is validated, never replaced.
@@ -228,4 +229,5 @@ install_opt_tool() {
     link_tool_entries "$home"
     printf '%s %s is installed in %s\n' "$name" "$version" "$home"
     print_tool_license "$version"
+    ! has_hook tool_after_install || tool_after_install "$version"
 }

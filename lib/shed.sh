@@ -154,7 +154,7 @@ complete_versions() {
                   if (complete) print v, (v in missing ? "" : newest[v]) } }' "$table"
 }
 
-# Print the version the loaded tool should be at: the newest complete recorded version (Claude: any listed release).
+# Print the version the loaded tool should be at: the newest complete recorded version.
 # With DELAY_DAYS > 0, versions other than the pin must have been discovered at least that long ago.
 target_version() {
     local delay=${1:-0} pin platform version stamp cutoff
@@ -164,13 +164,7 @@ target_version() {
     if platform=$(platform_string 2> /dev/null); then
         while read -r version stamp; do stamps[$version]=$stamp; done < <(complete_versions "$platform")
     fi
-    if [[ ${tool[name]} == claude ]]; then
-        while read -r version; do
-            if [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then candidates+=("$version"); fi
-        done < <(cat -- "$toolshed_root/metadata/claude-versions" 2> /dev/null || true; printf '%s\n' "$pin")
-    else
-        candidates=("${!stamps[@]}")
-    fi
+    candidates=("${!stamps[@]}")
     if (( delay > 0 )); then
         cutoff=$(date -u -d "-$delay days" +%Y-%m-%dT%H:%M:%SZ)
         for version in "${candidates[@]}"; do
@@ -196,9 +190,6 @@ recorded_versions() {
     table=$(shed_table)
     {
         pinned_version "${tool[name]}"
-        if [[ ${tool[name]} == claude && -f $toolshed_root/metadata/claude-versions ]]; then
-            cat -- "$toolshed_root/metadata/claude-versions"
-        fi
         if [[ -f $table ]]; then awk -F'|' 'NR > 1 && $2 !~ /\/license$/ {print $1}' "$table"; fi
     } | awk -v prefix="${tool[version_prefix]:-}" '/^[0-9]+\.[0-9]+\.[0-9]+$/ && index($0, prefix) == 1' | sort -uV
 }

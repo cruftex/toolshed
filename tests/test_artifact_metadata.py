@@ -72,3 +72,16 @@ class ArtifactMetadataTests(unittest.TestCase):
             self.assertIn('conflicting artifact checksum', result.stderr)
             usage = subprocess.run(['python3', ROOT / 'lib/artifact_metadata.py'], capture_output=True, text=True)
             self.assertNotEqual(usage.returncode, 0)
+
+    def test_empty_checksum_is_filled_once(self):
+        """An empty digest means not yet recorded: it is filled once, keeping the discovery time."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'tool.psv'
+            metadata.record_artifact(path, '1.2.3', '/linux-x64/binary', '', '2026-01-01T00:00:00Z')
+            metadata.record_artifact(path, '1.2.3', '/linux-x64/binary', 'a' * 64, '2026-02-01T00:00:00Z')
+            row = metadata.read_artifacts(path)[('1.2.3', '/linux-x64/binary')]
+            self.assertEqual((row['sha256'], row['discovered_at']), ('a' * 64, '2026-01-01T00:00:00Z'))
+            with self.assertRaisesRegex(ValueError, 'conflicting'):
+                metadata.record_artifact(path, '1.2.3', '/linux-x64/binary', 'b' * 64, '')
+            with self.assertRaisesRegex(ValueError, 'conflicting'):
+                metadata.record_artifact(path, '1.2.3', '/linux-x64/binary', '', '')

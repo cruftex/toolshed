@@ -92,4 +92,16 @@ t_record_round_trip() {
         fail 'conflicting record accepted'
 }
 
+t_empty_digest_is_filled_once() {
+    echo "# an empty recorded digest is not yet known: it is filled once, keeping the discovery time"
+    setup_repo
+    printf '2.0.0|/linux-x64/archive/tar.gz||2026-01-01T00:00:00Z\n' >> "$repo/metadata/artifacts/demo.psv"
+    check_recorded_checksums demo 2.0.0/linux-x64 8888888888888888888888888888888888888888888888888888888888888888
+    record_checksums demo 2.0.0/linux-x64 8888888888888888888888888888888888888888888888888888888888888888
+    grep -qxF '2.0.0|/linux-x64/archive/tar.gz|8888888888888888888888888888888888888888888888888888888888888888|2026-01-01T00:00:00Z' \
+        "$repo/metadata/artifacts/demo.psv" || fail 'digest not filled'
+    ! (check_recorded_checksums demo 2.0.0/linux-x64 9999999999999999999999999999999999999999999999999999999999999999) 2>/dev/null ||
+        fail 'filled digest replaced'
+}
+
 testsuite_main "$@"

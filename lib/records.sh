@@ -36,16 +36,16 @@ recorded_field() {
         '$1 == v && $2 == a {print $f; n++} END {exit n > 1 ? 2 : !n}' "$record_table"
 }
 
-# Fail if NAME's KEY already has a different recorded SHA256.
+# Fail if NAME's KEY already has a different recorded SHA256 (an empty recorded digest is not yet known).
 check_recorded_checksums() {
     local recorded status=0
     record_location "$1" "$2"
     recorded=$(recorded_field 3) || status=$?
     (( status != 2 )) || _installer_fail "Duplicate artifact metadata: $1 $2"
-    (( status != 0 )) || [[ $recorded == "$3" ]] || _installer_fail "Conflicting archive metadata: $1 $2"
+    (( status != 0 )) || [[ -z $recorded || $recorded == "$3" ]] || _installer_fail "Conflicting archive metadata: $1 $2"
 }
 
-# Record NAME's KEY with SHA256 (may be empty for Claude), keeping an existing discovery time.
+# Record NAME's KEY with SHA256, keeping an existing discovery time.
 record_checksums() {
     check_recorded_checksums "$1" "$2" "$3"
     python3 "$_installer_library_dir/artifact_metadata.py" record \

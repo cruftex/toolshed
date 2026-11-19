@@ -11,6 +11,12 @@
     "effective_url": "https://downloads.claude.ai/claude-code-releases/2.1.326/manifest.json",
     "peer_ip": "35.190.46.17"
   },
+  "2.1.325/linux-aarch64": {
+    "checksum_url": "https://downloads.claude.ai/claude-code-releases/2.1.325/manifest.json",
+    "discovered_at": "2026-11-19T03:20:28Z",
+    "effective_url": null,
+    "peer_ip": null
+  },
   "2.1.325/linux-x64": {
     "cache_path": "downloads.claude.ai/claude-code-releases/2.1.325/linux-x64/claude",
     "checksum_url": "https://downloads.claude.ai/claude-code-releases/2.1.325/manifest.json",

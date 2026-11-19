@@ -4,7 +4,7 @@ Every installer must reproduce a specific tool version. Pin the version, use a v
 expected SHA-256 in `metadata/artifacts/<tool>.psv`.
 Do not discover `latest` at installer runtime, run unpinned remote installation
 scripts, or upgrade tools automatically. Explicit `TOOLSHED_OVERRIDE_TOOL_VERSION` selections must
-use repository-recorded verification metadata, or Claude's signed manifest.
+use repository-recorded verification metadata.
 
 ## Downloads and verification
 
@@ -13,14 +13,12 @@ use repository-recorded verification metadata, or Claude's signed manifest.
   reliable CI, air-gapped installs, and reusable local tool repositories.
   Discovery may contact publishers to find and cache new releases.
 
-- Claude Code uses a pinned version and is exempt from embedded SHA-256 pins:
-  authenticate the versioned manifest with
-  Anthropic's GPG key fingerprint `31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE`, and
-  verify the executable against that signed manifest before execution or install.
-  Check that the manifest version matches the pinned release. Cache downloads
-  under `~/.cache/toolshed/downloads` (configured by `TOOLSHED_DOWNLOAD_DIR`), by tool and version;
-  reverify cached signatures and executable checksums before reuse. Keep Claude's
-  built-in updater disabled so upgrades happen through the verified installer.
+- Claude Code installs like every other tool, from the SHA-256 recorded in `metadata/artifacts/claude.psv`.
+  Discovery takes those checksums from the release's versioned manifest only after authenticating it with
+  Anthropic's GPG key fingerprint `31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE` and checking that the manifest
+  version matches the release; it then downloads each supported platform's executable and verifies it before
+  recording. Keep Claude's built-in updater disabled (`tool_after_install`) so upgrades happen through the
+  verified installer.
 
 - When adding or updating a tool, actually download each supported archive
   and calculate its SHA-256 locally. Compare it with the publisher's checksum when
@@ -73,7 +71,7 @@ use repository-recorded verification metadata, or Claude's signed manifest.
   `version_env`, `version_match`, `checksum`, `license`, `license_file`, `table`,
   `components`, `platforms`, `platform_names`, `version_prefix`, `detect`, `discover`,
   `strategy`. Hooks: `tool_validate`, `tool_prepare`, `tool_vars`, `tool_before_install`,
-  `tool_latest`, `tool_license`, `tool_after_discovery`, `tool_install`, `tool_discover`.
+  `tool_after_install`, `tool_latest`, `tool_license`, `tool_after_discovery`, `tool_install`, `tool_discover`.
 - Keep descriptors small and declarative; put reusable mechanics in `lib/install.sh`
   (primitives), `lib/tool.sh` (descriptor loading and the generic `bin`/`opt` flows),
   `lib/update.sh` (discovery), `lib/records.sh` (artifact-table lookups), `lib/provenance.sh` and `lib/shed.sh`

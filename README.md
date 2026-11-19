@@ -12,9 +12,8 @@ Requirements: Bash, coreutils, curl, tar, jq and Python 3 (for discovery and
 Normal installs and `shed update` use verified cached downloads without
 contacting external servers when all required files are cached. This reduces
 CI failures during outages and supports air-gapped installs and a reusable
-local tool repository. For Claude Code, the cache must also contain its signed
-manifest, signature, and signing key. `shed discover` contacts publishers to
-find and cache new releases.
+local tool repository. `shed discover` contacts publishers to find and cache new
+releases.
 
 ## Available tools
 
@@ -73,7 +72,7 @@ x86_64 with glibc. Claude also supports Linux arm64 with glibc; Vegeta supports
 Linux and macOS on x86_64 and arm64. Installers reject unsupported platforms.
 Set `TOOLSHED_OVERRIDE_TOOL_VERSION` for a single installer invocation to select
 a recorded version without changing the default pin; availability depends on
-the platform. Claude accepts versions verified by its signed manifest.
+the platform.
 
 kubectl provides the Kubernetes CLI (including Kustomize); Helm manages Kubernetes packages.
 kind runs local Kubernetes clusters using containers; clusterctl manages Cluster API providers.
@@ -155,8 +154,9 @@ are assigned directly and do not inherit exported overrides.
 Release metadata in `metadata/artifacts/` uses pipe-separated
 `version|artifact|sha256|discovered_at` rows. Artifact IDs contain the optional
 component name, target platform, and source type, such as `/linux-x64/binary`
-or `host/linux-x64/archive/tar.gz`. An empty SHA-256 is used for Claude, whose
-versioned manifest is authenticated instead. Archive-backed single-executable
+or `host/linux-x64/archive/tar.gz`. Claude's SHA-256 values come from its versioned
+manifest, which discovery authenticates with Anthropic's signing key before it
+downloads and checks each executable. Archive-backed single-executable
 installs verify the archive and compare its extracted bytes on repeat installs.
 
 Downloads are cached under `TOOLSHED_DOWNLOAD_DIR/<platform>/`. Existing

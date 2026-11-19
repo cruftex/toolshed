@@ -165,11 +165,11 @@ _installer_download() {
         # Peer file: remote IP, effective URL, then the server's certificate chain (curl's %{certs}).
         local peer
         peer=$(curl --fail --location --silent --show-error --proto '=https' --proto-redir '=https' \
-            --connect-timeout 15 --max-time 600 --write-out '%{remote_ip}\n%{url_effective}\n%{certs}' "$1" --output "$2") || return
+            --connect-timeout 15 --speed-limit 1024 --speed-time 60 --write-out '%{remote_ip}\n%{url_effective}\n%{certs}' "$1" --output "$2") || return
         printf '%s\n' "$peer" > "$2.peer"
     else
         curl --fail --location --silent --show-error --proto '=https' --proto-redir '=https' \
-            --connect-timeout 15 --max-time 600 "$1" --output "$2"
+            --connect-timeout 15 --speed-limit 1024 --speed-time 60 "$1" --output "$2"
     fi
 }
 

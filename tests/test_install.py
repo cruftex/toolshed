@@ -350,20 +350,26 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual((self.bin / "bun").read_text(), "previous Bun")
         self.assert_no_temporary_files()
 
-    def prepare_claude_fixture(self):
-        # Installer integration uses a signature mock; publisher signatures are
-        # verified by the separate real-GPG test below, without private keys.
+    def prepare_claude_fixture(self, version="2.1.322", record=True):
+        # Discovery uses a signature mock; publisher signatures are verified by the
+        # separate real-GPG test below, without private keys. Installs only use claude.psv.
         release = self.root / "signed release"
-        release.mkdir()
-        binary = b"#!/bin/sh\nprintf '2.1.322 (Claude Code)\\n'\n"
+        release.mkdir(exist_ok=True)
+        binary = f"#!/bin/sh\nprintf '{version} (Claude Code)\\n'\n".encode()
         (release / "claude").write_bytes(binary)
-        (release / "latest").write_text("2.1.322")
+        (release / "latest").write_text(version)
         (self.repo / "pins/claude").write_text("2.1.322\n")
         (release / "key.asc").write_text("31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE")
         digest = hashlib.sha256(binary).hexdigest()
-        self.write_mock_manifest(release, {"version": "2.1.322", "platforms": {
+        self.write_mock_manifest(release, {"version": version, "platforms": {
             platform: {"checksum": digest} for platform in ("linux-x64", "linux-arm64")
         }})
+        table = self.repo / "metadata/artifacts/claude.psv"
+        rows = "version|artifact|sha256|discovered_at\n"
+        if record:
+            rows += "".join(f"{version}|/{platform}/binary|{digest}|2026-01-01T00:00:00Z\n"
+                            for platform in ("linux-aarch64", "linux-x64"))
+        table.write_text(rows)
         gpg = self.commands / "gpg"
         gpg.write_text("""#!/usr/bin/env python3
 import hashlib
@@ -396,6 +402,12 @@ elif '--import' not in sys.argv:
             env=dict(self.env, **environment), capture_output=True, text=True, timeout=30,
         )
 
+    def discover_claude(self, **environment):
+        return subprocess.run(
+            [self.repo / "lib/discover-tool.sh", "claude"], cwd=self.root,
+            env=dict(self.env, **environment), capture_output=True, text=True, timeout=30,
+        )
+
     def test_real_gpg_signature_and_tampering_without_agent(self):
         fixtures = ROOT / "tests/fixtures/claude"
         data = self.root / "manifest.json"
@@ -415,64 +427,53 @@ elif '--import' not in sys.argv:
         self.assertIn("signature verification failed", tampered.stderr)
         self.assert_no_temporary_files()
 
-    def test_claude_rejects_signature_from_extra_key(self):
-        self.prepare_claude_fixture()
-        result = self.run_claude(GPG_SIGNER="0" * 40)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("not signed by the expected key", result.stderr)
+    def test_claude_discovery_records_signed_checksums_for_all_platforms(self):
+        _, release, _ = self.prepare_claude_fixture()
+        for version in ("../escape", "latest", "2.1.322/../../escape"):
+            (release / "latest").write_text(version)
+            result = self.discover_claude()
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("Invalid latest release version", result.stderr)
+        _, _, binary = self.prepare_claude_fixture("2.1.323", record=False)
+        result = self.discover_claude()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), "2.1.323")
+        digest = hashlib.sha256(binary).hexdigest()
+        rows = (self.repo / "metadata/artifacts/claude.psv").read_text()
+        for platform in ("linux-x64", "linux-aarch64"):
+            self.assertIn(f"2.1.323|/{platform}/binary|{digest}|", rows)
+        self.assertIn("2.1.323|/license|", rows)
+        provenance = json.loads((self.repo / "metadata/provenance/claude.json").read_text())
+        self.assertEqual(provenance["2.1.323/linux-aarch64"]["checksum_url"],
+                         "https://downloads.claude.ai/claude-code-releases/2.1.323/manifest.json")
+        self.assertEqual((self.repo / "pins/claude").read_text(), "2.1.322\n")
         self.assertFalse(self.bin.exists())
+        releases = self.downloads / "linux-x64/downloads.claude.ai/claude-code-releases/2.1.323"
+        self.assertTrue((releases / "linux-x64/claude").exists())
+        self.assertTrue((self.downloads / "linux-aarch64/downloads.claude.ai/claude-code-releases/2.1.323/linux-arm64/claude").exists())
+        self.assertFalse((self.repo / "metadata/claude-versions").exists())
+        again = self.discover_claude()
+        self.assertEqual(again.returncode, 0, again.stderr)
+        self.assertEqual((self.repo / "metadata/artifacts/claude.psv").read_text(), rows)
         self.assert_no_temporary_files()
 
-    def test_claude_latest_install_repeat_cache_and_modified_binary(self):
-        _, _, binary = self.prepare_claude_fixture()
-        settings = Path(self.env["HOME"]) / ".claude/settings.json"
-        settings.parent.mkdir(parents=True)
-        settings.write_text('{"theme": "dark", "env": {"OTHER": "keep"}}')
-        settings.chmod(0o640)
-        first = self.run_claude()
-        self.assertEqual(first.returncode, 0, first.stderr)
-        installed = self.bin / "claude"
-        self.assertEqual(installed.read_bytes(), binary)
-        self.assertTrue(os.access(installed, os.X_OK))
-        self.assertEqual(json.loads(settings.read_text()), {
-            "theme": "dark", "env": {"OTHER": "keep", "DISABLE_UPDATES": "1"},
-        })
-        self.assertEqual(settings.stat().st_mode & 0o777, 0o640)
-        cache = self.downloads / "linux-x64/downloads.claude.ai/claude-code-releases/2.1.322/linux-x64/claude"
-        self.assertEqual(cache.read_bytes(), binary)
-        # Reinstall modified bytes from cache without downloading metadata/binary.
-        self.calls.unlink()
-        installed.write_bytes(binary + b"# modified, same version\n")
-        reinstall = self.run_claude()
-        self.assertEqual(reinstall.returncode, 0, reinstall.stderr)
-        self.assertEqual(installed.read_bytes(), binary)
-        self.assertFalse(self.calls.exists())
-        # A matching installation does not need the binary download cache.
-        cache.unlink()
-        before = installed.stat()
-        repeat = self.run_claude()
-        self.assertEqual(repeat.returncode, 0, repeat.stderr)
-        self.assertEqual(installed.stat().st_ino, before.st_ino)
-        self.assertFalse(self.calls.exists())
-        self.assert_no_temporary_files()
-
-    def test_claude_verification_failures_preserve_existing_binary(self):
-        installer, release, binary = self.prepare_claude_fixture()
-        self.bin.mkdir()
-        installed = self.bin / "claude"
-        installed.write_text("existing installation")
+    def test_claude_discovery_rejects_unverified_releases_without_recording(self):
+        installer, release, binary = self.prepare_claude_fixture("2.1.323", record=False)
         original_script = installer.read_text()
         original_manifest = (release / "manifest.json").read_bytes()
         original_signature = (release / "manifest.json.sig").read_bytes()
+        table = self.repo / "metadata/artifacts/claude.psv"
+        recorded = table.read_text()
         cases = (
-            ("fingerprint", "Invalid signing key fingerprint"),
-            ("signature", "signature verification failed"),
-            ("manifest version", "Signed manifest version"),
-            ("manifest digest", "Invalid SHA-256"),
-            ("binary", "SHA-256 verification failed"),
-            ("version", "Expected version"),
+            ("fingerprint", "Invalid signing key fingerprint", {}),
+            ("extra key", "not signed by the expected key", {"GPG_SIGNER": "0" * 40}),
+            ("signature", "signature verification failed", {}),
+            ("manifest version", "Signed manifest version", {}),
+            ("manifest digest", "Invalid SHA-256", {}),
+            ("binary", "SHA-256 verification failed", {}),
+            ("version", "Unexpected claude version", {}),
         )
-        for failure, message in cases:
+        for failure, message, environment in cases:
             with self.subTest(failure=failure):
                 shutil.rmtree(self.downloads, ignore_errors=True)
                 script = original_script
@@ -493,33 +494,90 @@ elif '--import' not in sys.argv:
                 elif failure == "binary":
                     (release / "claude").write_bytes(b"corrupt")
                 elif failure == "version":
-                    script = script.replace('"$version (Claude Code)"', '"unexpected version"')
+                    script = script.replace("version_match='{version} (Claude Code)'", "version_match='unexpected'")
                 installer.write_text(script)
-                result = self.run_claude()
+                result = self.discover_claude(**environment)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(message, result.stderr)
+                self.assertEqual(table.read_text(), recorded)
+                self.assertFalse((self.repo / "metadata/provenance/claude.json").exists()
+                                 and "2.1.323" in (self.repo / "metadata/provenance/claude.json").read_text())
+                self.assert_no_temporary_files()
+
+    def test_claude_install_from_recorded_checksum_repeat_cache_and_modified_binary(self):
+        _, release, binary = self.prepare_claude_fixture()
+        settings = Path(self.env["HOME"]) / ".claude/settings.json"
+        settings.parent.mkdir(parents=True)
+        settings.write_text('{"theme": "dark", "env": {"OTHER": "keep"}}')
+        settings.chmod(0o640)
+        (release / "manifest.json.sig").write_text("installs never read the manifest")
+        first = self.run_claude()
+        self.assertEqual(first.returncode, 0, first.stderr)
+        self.assertEqual(self.calls.read_text().splitlines(), ["called"])
+        installed = self.bin / "claude"
+        self.assertEqual(installed.read_bytes(), binary)
+        self.assertTrue(os.access(installed, os.X_OK))
+        self.assertEqual(json.loads(settings.read_text()), {
+            "theme": "dark", "env": {"OTHER": "keep", "DISABLE_UPDATES": "1"},
+        })
+        self.assertEqual(settings.stat().st_mode & 0o777, 0o640)
+        cache = self.downloads / "linux-x64/downloads.claude.ai/claude-code-releases/2.1.322/linux-x64/claude"
+        self.assertEqual(cache.read_bytes(), binary)
+        # Reinstall modified bytes from the cache without downloading.
+        self.calls.unlink()
+        installed.write_bytes(binary + b"# modified, same version\n")
+        reinstall = self.run_claude()
+        self.assertEqual(reinstall.returncode, 0, reinstall.stderr)
+        self.assertIn("WARNING: installed claude differs", reinstall.stderr)
+        self.assertEqual(installed.read_bytes(), binary)
+        self.assertFalse(self.calls.exists())
+        # A matching installation does not need the download cache.
+        cache.unlink()
+        before = installed.stat()
+        repeat = self.run_claude()
+        self.assertEqual(repeat.returncode, 0, repeat.stderr)
+        self.assertEqual(installed.stat().st_ino, before.st_ino)
+        self.assertFalse(self.calls.exists())
+        self.assert_no_temporary_files()
+
+    def test_claude_install_failures_preserve_existing_binary(self):
+        installer, release, binary = self.prepare_claude_fixture()
+        self.bin.mkdir()
+        installed = self.bin / "claude"
+        installed.write_text("existing installation")
+        original_script = installer.read_text()
+        cases = (
+            ("binary", "SHA-256 verification failed", {}),
+            ("version", "Unexpected claude version", {}),
+            ("unrecorded", "No pinned claude checksum for 9.9.9/linux-x64", {"TOOLSHED_OVERRIDE_TOOL_VERSION": "9.9.9"}),
+        )
+        for failure, message, environment in cases:
+            with self.subTest(failure=failure):
+                shutil.rmtree(self.downloads, ignore_errors=True)
+                (release / "claude").write_bytes(b"corrupt" if failure == "binary" else binary)
+                installer.write_text(original_script.replace("version_match='{version} (Claude Code)'", "version_match='other'")
+                                     if failure == "version" else original_script)
+                result = self.run_claude(**environment)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn(message, result.stderr)
                 self.assertEqual(installed.read_text(), "existing installation")
                 self.assert_no_temporary_files()
 
-    def test_claude_corrupt_metadata_and_binary_caches_are_rejected(self):
+    def test_claude_corrupt_cache_is_rejected(self):
         self.prepare_claude_fixture()
         first = self.run_claude()
         self.assertEqual(first.returncode, 0, first.stderr)
         installed = self.bin / "claude"
         installed.write_text("existing installation")
-        cache = self.downloads / "linux-x64/downloads.claude.ai/claude-code-releases/2.1.322"
-        manifest = cache / "manifest/manifest.json"
-        original = manifest.read_bytes()
-        for target in (manifest, cache / "linux-x64/claude"):
-            with self.subTest(target=target.name):
-                target.write_bytes(b"corrupt")
-                result = self.run_claude()
-                self.assertNotEqual(result.returncode, 0)
-                self.assertEqual(installed.read_text(), "existing installation")
-                manifest.write_bytes(original)
-                self.assert_no_temporary_files()
+        cache = self.downloads / "linux-x64/downloads.claude.ai/claude-code-releases/2.1.322/linux-x64/claude"
+        cache.write_bytes(b"corrupt")
+        result = self.run_claude()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("SHA-256 verification failed", result.stderr)
+        self.assertEqual(installed.read_text(), "existing installation")
+        self.assert_no_temporary_files()
 
-    def test_claude_fresh_install_uses_complete_cache_offline(self):
+    def test_claude_fresh_install_uses_cache_offline(self):
         self.prepare_claude_fixture()
         first = self.run_claude()
         self.assertEqual(first.returncode, 0, first.stderr)
@@ -532,54 +590,18 @@ elif '--import' not in sys.argv:
         self.assertEqual(installed.read_bytes(), original)
         self.assertFalse(self.calls.exists())
 
-    def test_claude_latest_version_validation_and_upgrade(self):
-        _, release, _ = self.prepare_claude_fixture()
-        for version in ("../escape", "latest", "2.1.322/../../escape"):
-            (release / "latest").write_text(version)
-            result = subprocess.run([self.repo / "lib/discover-tool.sh", "claude"], cwd=self.root, env=self.env, capture_output=True, text=True)
-            self.assertNotEqual(result.returncode, 0)
-            self.assertIn("Invalid latest release version", result.stderr)
-            self.assertFalse(self.bin.exists())
-        (release / "latest").write_text("2.1.322")
-        first = self.run_claude()
-        self.assertEqual(first.returncode, 0, first.stderr)
-        (release / "latest").write_text("2.1.323")
-        binary = b"#!/bin/sh\nprintf '2.1.323 (Claude Code)\\n'\n"
-        (release / "claude").write_bytes(binary)
-        self.write_mock_manifest(release, {"version": "2.1.323", "platforms": {
-            "linux-x64": {"checksum": hashlib.sha256(binary).hexdigest()},
-        }})
-        upgrade = subprocess.run([self.repo / "lib/discover-tool.sh", "claude"], cwd=self.root, env=self.env, capture_output=True, text=True)
-        self.assertEqual(upgrade.returncode, 0, upgrade.stderr)
-        self.assertNotEqual((self.bin / "claude").read_bytes(), binary)
-        self.assertEqual((self.repo / "pins/claude").read_text(), "2.1.322\n")
-        self.assertIn("2.1.323", (self.repo / "metadata/claude-versions").read_text())
-        self.assertTrue((self.downloads / "linux-x64/downloads.claude.ai/claude-code-releases/2.1.322/linux-x64/claude").exists())
-        self.assertTrue((self.downloads / "linux-x64/downloads.claude.ai/claude-code-releases/2.1.323/linux-x64/claude").exists())
-
     def test_claude_download_failure_and_interrupt_cleanup(self):
         self.prepare_claude_fixture()
         self.bin.mkdir()
         installed = self.bin / "claude"
         installed.write_text("existing installation")
-        for asset in ("manifest.json", "manifest.json.sig", "claude-code.asc", "/linux-x64/claude"):
-            for mode in ("fail", "interrupt"):
-                with self.subTest(asset=asset, mode=mode):
-                    shutil.rmtree(self.downloads, ignore_errors=True)
-                    result = self.run_claude(DOWNLOAD_MODE=mode, DOWNLOAD_MATCH=asset)
-                    self.assertNotEqual(result.returncode, 0)
-                    self.assertEqual(installed.read_text(), "existing installation")
-                    self.assert_no_temporary_files()
-
-    def test_claude_updater_rejects_invalid_manifest_without_changing_pin(self):
-        _, release, _ = self.prepare_claude_fixture()
-        (release / "latest").write_text("2.1.323")
-        (release / "manifest.json.sig").write_text("invalid")
-        result = subprocess.run([self.repo / "lib/discover-tool.sh", "claude"], cwd=self.root,
-                                env=self.env, capture_output=True, text=True)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertEqual((self.repo / "pins/claude").read_text(), "2.1.322\n")
-        self.assertFalse((self.bin / "claude").exists())
+        for mode in ("fail", "interrupt"):
+            with self.subTest(mode=mode):
+                shutil.rmtree(self.downloads, ignore_errors=True)
+                result = self.run_claude(DOWNLOAD_MODE=mode)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(installed.read_text(), "existing installation")
+                self.assert_no_temporary_files()
 
     def test_claude_platform_mapping_and_unsupported_hosts(self):
         self.prepare_claude_fixture()
@@ -594,7 +616,7 @@ elif '--import' not in sys.argv:
                     self.assertTrue((self.downloads / "linux-aarch64/downloads.claude.ai/claude-code-releases/2.1.322/linux-arm64/claude").exists())
                 else:
                     self.assertNotEqual(result.returncode, 0)
-                    self.assertIn("Unsupported Claude platform", result.stderr)
+                    self.assertIn("No pinned claude checksum for 2.1.322/darwin-aarch64", result.stderr)
 
     @unittest.skipUnless(os.environ.get("BUN_TEST_ARCHIVE"), "Set BUN_TEST_ARCHIVE to a real Bun archive")
     def test_real_bun_installation_and_repeat(self):

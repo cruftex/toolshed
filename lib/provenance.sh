@@ -46,7 +46,6 @@ record_provenance() {
     local timestamp ip='' url='' tls='' staging ip_pattern='^([0-9]{1,3}\.){3}[0-9]{1,3}$|^[0-9a-fA-F:]*:[0-9a-fA-F:.]*$'
     local -a peer=()
     _installer_require jq openssl
-    if [[ $name == claude ]]; then record_checksums claude "$key" '' || return; fi
     timestamp=$(recorded_timestamp "$name" "$key") || return
     if [[ -f $peer_file ]]; then
         mapfile -t -n 2 peer < "$peer_file"

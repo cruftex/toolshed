@@ -53,16 +53,17 @@ def read_artifacts(path):
 
 
 def record_artifact(path, version, artifact, sha256, discovered_at):
-    """Add an artifact without changing an existing checksum or discovery time."""
+    """Add an artifact, or fill in its empty checksum or discovery time; never change a recorded value."""
     path = Path(path)
     records = read_artifacts(path) if path.exists() else {}
     key = (version, artifact)
     if key in records:
-        if records[key]['sha256'] != sha256:
+        # An empty digest means "not yet recorded" and may be filled once; a recorded digest never changes.
+        if records[key]['sha256'] not in ('', sha256):
             raise ValueError(f'{path}: conflicting artifact checksum for {version}/{artifact}')
-        if records[key]['discovered_at'] or not discovered_at:
+        if records[key]['sha256'] == sha256 and (records[key]['discovered_at'] or not discovered_at):
             return records[key]
-        row = dict(records[key], discovered_at=discovered_at)
+        row = dict(records[key], sha256=sha256, discovered_at=records[key]['discovered_at'] or discovered_at)
     else:
         row = dict(zip(HEADER, (version, artifact, sha256, discovered_at)))
     records[key] = row

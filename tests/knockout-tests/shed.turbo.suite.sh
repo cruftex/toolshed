@@ -95,17 +95,6 @@ t_target_version_respects_delay_and_pin() {
     assert_eq "$(target_version)" '' 'no records'
 }
 
-t_target_version_for_claude_uses_release_list() {
-    echo "# Claude's versions come from metadata/claude-versions and its pin"
-    setup_shed
-    printf 'kind=scripted\n' > "$repo/tools/claude.sh"
-    printf '2.1.9\n' > "$repo/pins/claude"
-    printf '2.1.10\nbad\n2.1.8\n' > "$repo/metadata/claude-versions"
-    tool_settings claude
-    assert_eq "$(target_version)" 2.1.10 latest
-    assert_eq "$(target_version 8)" 2.1.9 delayed
-}
-
 t_recorded_versions_lists_all_platforms() {
     echo "# shed available lists the pin and every recorded non-license version, ascending"
     setup_shed
