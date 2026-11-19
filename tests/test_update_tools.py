@@ -14,37 +14,6 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 
 class UpdateTests(unittest.TestCase):
-    def test_missing_provenance_is_completed_without_replacing_discovery_time(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / 'provenance.json'
-            peer = Path(tmp) / 'peer'
-            key = '1.2.3/linux-x64'
-            source = 'https://example.test/checksum'
-            path.write_text(json.dumps({key: {'discovered_at': '2020-01-01T00:00:00Z',
-                                             'checksum_url': source, 'effective_url': None, 'peer_ip': None}}))
-            peer.write_text('192.0.2.5\nhttps://example.test/final\n')
-            subprocess.run(['python3', ROOT / 'lib/provenance.py', path, key, source, peer], check=True)
-            entry = json.loads(path.read_text())[key]
-            self.assertEqual(entry['discovered_at'], '2020-01-01T00:00:00Z')
-            self.assertEqual(entry['peer_ip'], '192.0.2.5')
-            self.assertEqual(entry['effective_url'], 'https://example.test/final')
-            self.assertIn('peer_observed_at', entry)
-
-    def test_provenance_uses_authoritative_artifact_timestamp(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / 'provenance.json'
-            peer = Path(tmp) / 'peer'
-            key = '1.2.3/linux-x64'
-            source = 'https://example.test/checksum'
-            path.write_text(json.dumps({key: {'discovered_at': '2020-01-01T00:00:00Z',
-                                             'checksum_url': source, 'effective_url': source,
-                                             'peer_ip': '192.0.2.5'}}))
-            subprocess.run(['python3', ROOT / 'lib/provenance.py', path, key, source, peer,
-                            '2019-01-01T00:00:00Z'], check=True)
-            entry = json.loads(path.read_text())[key]
-            self.assertEqual(entry['discovered_at'], '2019-01-01T00:00:00Z')
-            self.assertEqual(entry['peer_ip'], '192.0.2.5')
-
     def test_bun_update_and_repeat(self):
         with tempfile.TemporaryDirectory(prefix='bun update ') as temp:
             root = Path(temp)
@@ -70,10 +39,13 @@ done
 [[ $url != https://raw.githubusercontent.com/* ]] || { printf 'license text\n' > "$out"; exit 0; }
 if [[ $url == */latest ]]; then cp "$FIXTURE/release.json" "$out"; else cp "$FIXTURE/bun-linux-x64.zip" "$out"; fi
 printf '192.0.2.10\\n%s\\n' "${url%/latest}/redirected"
+tail -n +3 "$CERTS"
 ''')
             curl.chmod(0o755)
             env = dict(os.environ, PATH=f'{commands}:{os.environ["PATH"]}', FIXTURE=str(root),
+                       CERTS=str(ROOT / 'tests/fixtures/tls/certs.peer'),
                        TOOLSHED_OVERRIDE_TOOL_VERSION='invalid-discovery-override')
+            before = (repo / 'metadata/provenance/bun.json').read_text()
             old_pin = (repo / 'pins/bun').read_text()
             for _ in range(2):
                 result = subprocess.run([repo / 'lib/discover-tool.sh', 'bun'], cwd=root, env=env, capture_output=True, text=True)
@@ -83,8 +55,13 @@ printf '192.0.2.10\\n%s\\n' "${url%/latest}/redirected"
             self.assertEqual(result.stdout.strip(), '1.5.0')
             metadata = (repo / 'metadata/artifacts/bun.psv').read_text()
             self.assertEqual(metadata.count('1.5.0|/linux-x64/archive/zip|'), 1)
-            provenance = json.loads((repo / 'metadata/provenance/bun.json').read_text())['1.5.0/linux-x64']
+            after = (repo / 'metadata/provenance/bun.json').read_text()
+            self.assertTrue(after.startswith('{\n  "1.5.0/linux-x64": {'), after)
+            self.assertTrue(after.endswith(before[1:]), 'existing provenance lines changed')
+            provenance = json.loads(after)['1.5.0/linux-x64']
             self.assertEqual(provenance['peer_ip'], '192.0.2.10')
+            self.assertEqual(provenance['tls']['sha256'], '65ee1c15c5411d8d1468fd84fed215ad13df7b8d29b414c89765af2d9bc2f873')
+            self.assertEqual(provenance['tls']['not_after'], '2095-05-01T02:04:06Z')
             self.assertEqual(provenance['checksum_url'], 'https://api.github.com/repos/oven-sh/bun/releases/latest')
             self.assertEqual(provenance['effective_url'], 'https://api.github.com/repos/oven-sh/bun/releases/redirected')
             rows = (repo / 'metadata/artifacts/bun.psv').read_text()

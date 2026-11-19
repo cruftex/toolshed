@@ -83,7 +83,7 @@ cp "$FIXTURES/${url##*/}" "$out"
             binaries = {}
             for name, *_ in PINS:
                 asset = name + "-x86_64-unknown-linux-musl"
-                binary = ("#!/bin/sh\necho 'codex-cli 0.170.0'\n# " + name + "\n").encode()
+                binary = ("#!/bin/sh\necho 'codex-cli 99.170.0'\n# " + name + "\n").encode()
                 binaries[name] = binary
                 archive = root / (asset + ".tar.gz")
                 with tarfile.open(archive, "w:gz") as tar:
@@ -91,7 +91,7 @@ cp "$FIXTURES/${url##*/}" "$out"
                     member.size = len(binary)
                     tar.addfile(member, io.BytesIO(binary))
                 assets.append({"name": archive.name, "digest": "sha256:" + hashlib.sha256(archive.read_bytes()).hexdigest()})
-            (root / "release.json").write_text(json.dumps({"tag_name": "rust-v0.170.0", "draft": False, "prerelease": False, "assets": assets}))
+            (root / "release.json").write_text(json.dumps({"tag_name": "rust-v99.170.0", "draft": False, "prerelease": False, "assets": assets}))
             commands = root / "commands"
             commands.mkdir()
             curl = commands / "curl"
@@ -112,6 +112,6 @@ if [[ $url == */latest ]]; then cp "$FIXTURES/release.json" "$out"; else cp "$FI
             for name in binaries:
                 self.assertFalse((dest / name).exists())
                 component = 'host' if name == 'codex-code-mode-host' else ''
-                self.assertIn(f'0.170.0|{component}/linux-x64/archive/tar.gz|', (repo / 'metadata/artifacts/codex.psv').read_text())
+                self.assertIn(f'99.170.0|{component}/linux-x64/archive/tar.gz|', (repo / 'metadata/artifacts/codex.psv').read_text())
             again = subprocess.run([repo / "lib/discover-tool.sh", "codex"], cwd=root, env=env, capture_output=True, text=True)
             self.assertEqual(again.returncode, 0, again.stderr)

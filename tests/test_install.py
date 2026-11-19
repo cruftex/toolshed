@@ -83,7 +83,7 @@ class InstallerTests(unittest.TestCase):
 
     def run_helper(self, script, **environment):
         return subprocess.run(
-            ["bash", "-c", 'set -euo pipefail; source "$TEST_LIBRARY"; ' + script],
+            ["bash", "-c", 'set -euo pipefail; source "$TEST_LIBRARY"; toolshed_init; ' + script],
             cwd=self.root,
             env=dict(self.env, **environment),
             capture_output=True,

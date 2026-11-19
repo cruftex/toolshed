@@ -3,5 +3,6 @@
 set -euo pipefail
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/install.sh"
 source "$_installer_library_dir/tool.sh"
+toolshed_init
 (( $# >= 1 )) || _installer_fail 'Usage: install-tool.sh TOOL'
 install_tool "$@"

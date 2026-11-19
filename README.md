@@ -20,7 +20,7 @@ find and cache new releases.
 
 The table shows the latest version recorded in this checkout, which may differ
 from the default pin and from the latest upstream release. Regenerate it after
-metadata changes with `./update-readme.py`.
+metadata changes with `./update-readme.sh`.
 
 <!-- tools-table:start -->
 | Tool | Latest recorded version | Install strategy |

@@ -57,3 +57,18 @@ class ArtifactMetadataTests(unittest.TestCase):
                     path.write_text('version|artifact|sha256|discovered_at\n' + row)
                     with self.assertRaises(ValueError):
                         metadata.read_artifacts(path)
+
+    def test_record_command_line(self):
+        """artifact_metadata.py record writes one row and reports invalid input without a traceback."""
+        import subprocess
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'tool.psv'
+            command = ['python3', ROOT / 'lib/artifact_metadata.py', 'record', path, '1.2.3', '/linux-x64/binary']
+            subprocess.run(command + ['c' * 64, '2026-01-01T00:00:00Z'], check=True)
+            self.assertEqual(path.read_text(), 'version|artifact|sha256|discovered_at\n'
+                             '1.2.3|/linux-x64/binary|' + 'c' * 64 + '|2026-01-01T00:00:00Z\n')
+            result = subprocess.run(command + ['d' * 64, ''], capture_output=True, text=True)
+            self.assertEqual((result.returncode, result.stderr.count('Traceback')), (1, 0))
+            self.assertIn('conflicting artifact checksum', result.stderr)
+            usage = subprocess.run(['python3', ROOT / 'lib/artifact_metadata.py'], capture_output=True, text=True)
+            self.assertNotEqual(usage.returncode, 0)

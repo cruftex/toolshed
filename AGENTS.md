@@ -50,13 +50,22 @@ use repository-recorded verification metadata, or Claude's signed manifest.
   once as `metadata/license/<sha256>.txt`, with its short name (lowercase SPDX-style, for example `apache-2.0`,
   `gpl-2.0-classpath`, `oracle-nftc`) in `<sha256>.name.txt`. A changed license text for a recorded version fails discovery.
 
+## Provenance
+
+- `record_provenance` (`lib/provenance.sh`) writes `metadata/provenance/<tool>.json` in canonical order: newest
+  version first (numeric), then platform, keys sorted within entries, `jq --indent 2`. A new release only adds lines
+  at the top; an existing complete entry is never rewritten. Don't hand-edit the order.
+- Each entry records the checksum source, effective URL, peer IP and the server's TLS certificate (`tls`: subject,
+  issuer, serial, `not_before`/`not_after`, SHA-256 fingerprint, issuer certificate's fingerprint). Discovery
+  downloads write `<file>.peer`: the remote IP, effective URL, then curl's `%{certs}` chain.
+
 ## Tool descriptors
 
 - Each tool is described by one file, `tools/<tool>.sh`; there are no per-tool install or
   discover scripts. Install with `shed install <tool>` (or `lib/install-tool.sh <tool>`),
   discover with `shed discover <tool>` (or `lib/discover-tool.sh <tool>`).
 - Descriptors hold top-level, single-line `key=value` settings (one shell word, quoted as
-  needed) that both Bash and `lib/tools.py` read, plus optional hook functions. `kind` says
+  needed) that `tool_settings` in `lib/tool.sh` reads without sourcing, plus optional hook functions. `kind` says
   where the tool goes: `bin` (one executable into `TOOLSHED_BIN_DIR`), `opt` (multi-file
   package in `$TOOLSHED_OPT_DIR/<tool>/<version>/` with linked entry points), or `scripted`
   (`tool_install`/`tool_discover` hooks do the work). Other keys: `repo`, `tag`, `url`,
@@ -66,14 +75,18 @@ use repository-recorded verification metadata, or Claude's signed manifest.
   `strategy`. Hooks: `tool_validate`, `tool_prepare`, `tool_vars`, `tool_before_install`,
   `tool_latest`, `tool_license`, `tool_after_discovery`, `tool_install`, `tool_discover`.
 - Keep descriptors small and declarative; put reusable mechanics in `lib/install.sh`
-  (primitives), `lib/tool.sh` (descriptor loading and the generic `bin`/`opt` flows) and
-  `lib/update.sh` (discovery). Prefer a new descriptor setting over a hook when several
+  (primitives), `lib/tool.sh` (descriptor loading and the generic `bin`/`opt` flows),
+  `lib/update.sh` (discovery), `lib/records.sh` (artifact-table lookups), `lib/provenance.sh` and `lib/shed.sh`
+  (the `shed` commands and the README table of `./update-readme.sh`). Prefer a new descriptor setting over a hook when several
   tools need the same behaviour.
 - Prefer Bash with standard utilities over inline Python: use `jq` for JSON, `awk` for PSV lookups,
   and `grep`/`sed`/`sort` for simple text or XML extraction, then validate results with Bash regexes.
-  Keep Python for real logic (`lib/shed.py`, `lib/tools.py`, provenance, PSV validation and writing)
-  and for parsing that Bash cannot do well, such as HTML to text (the Oracle license in
-  `tools/oracle-java25.sh`). `jq` is a prerequisite; check it with `_installer_require jq`.
+  Keep Python only where it has a real advantage: PSV validation and writing (`lib/artifact_metadata.py`),
+  NVM file replacement with rollback (`lib/replace-nvm.py`), and parsing that Bash cannot do well, such as
+  HTML to text (the Oracle license in `tools/oracle-java25.sh`). `jq` is a prerequisite; check it with `_installer_require jq`.
+- Library files only define functions and variables when sourced, so each function can be unit tested
+  in a knockout.sh turbo suite. Entry points call `toolshed_init` (install) or `discovery_init` (discovery),
+  which load `env` and install the cleanup and signal traps.
 - The library loads `env`, owns temporary-file cleanup and signal traps, and
   provides platform, download, extraction, version, and installation helpers.
 - Build GitHub asset names using `platform_string` (or run `lib/platform.sh`),
@@ -106,8 +119,9 @@ Bun's `bunx` entry point is a relative symlink to the `bun` executable.
 
 ## Validation
 
-Run `bash -n lib/*.sh tools/*.sh bin/shed` and
-`python3 -m unittest discover -s tests -v`. Test downloads, cache reuse, corruption,
+Run `bash -n lib/*.sh tools/*.sh bin/shed` and `knockout.sh` (runs `tests/knockout-tests/`: Bash turbo
+suites for the library functions and the Python unittests as a worker suite; `python3 -m unittest discover -s tests -v`
+still works). Unit test new Bash functions in a `*.turbo.suite.sh`; shared helpers live in `tests/knockout-tests/lib/`. Test downloads, cache reuse, corruption,
 interruption cleanup, paths containing spaces, execution from another directory,
 and preservation of existing executables on failure. Smoke-test real downloads
 in temporary configured directories, verifying installed files and checksums; running

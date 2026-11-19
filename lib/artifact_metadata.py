@@ -1,10 +1,14 @@
-"""Read versioned, pipe-separated source-artifact metadata."""
+"""Read and write versioned, pipe-separated source-artifact metadata.
+
+Usage: artifact_metadata.py record PATH VERSION ARTIFACT SHA256 DISCOVERED_AT
+"""
 
 import csv
 import datetime
 import io
 import os
 import re
+import sys
 import tempfile
 from pathlib import Path
 
@@ -79,3 +83,12 @@ def record_artifact(path, version, artifact, sha256, discovered_at):
             os.unlink(temporary)
     return row
 
+
+
+if __name__ == '__main__':
+    if len(sys.argv) != 7 or sys.argv[1] != 'record':
+        sys.exit('Usage: artifact_metadata.py record PATH VERSION ARTIFACT SHA256 DISCOVERED_AT')
+    try:
+        record_artifact(*sys.argv[2:])
+    except (OSError, ValueError) as error:
+        sys.exit(str(error))

@@ -7,10 +7,17 @@ while [[ -L $script ]]; do
     [[ $script == /* ]] || script="$directory/$script"
 done
 root=$(cd -- "$(dirname -- "$script")/.." && pwd)
+source "$root/lib/install.sh"
+source "$root/lib/tool.sh"
+source "$root/lib/shed.sh"
+usage='Usage: shed {available|installed|install TOOL...|update [--delay-days DAYS]|discover [TOOL...]}'
 case ${1:-} in
     available)
         [[ $# == 1 ]] || { printf 'Usage: shed available\n' >&2; exit 2; }
-        exec python3 "$root/lib/tools.py" available "$root"
+        shed_available
+        ;;
+    discoverable) # For automation: the tools that have a release discovery.
+        shed_discoverable
         ;;
     install)
         shift
@@ -25,19 +32,28 @@ case ${1:-} in
         fi
         printf 'Updating Toolshed checkout...\n'
         git -C "$root" pull --ff-only
-        source "$root/env"
-        exec python3 "$root/lib/shed.py" discover "$TOOLSHED_BIN_DIR" "$TOOLSHED_OPT_DIR" "$TOOLSHED_NVM_DIR"
+        toolshed_init
+        shed_run discover
         ;;
     update)
         shift
-        source "$root/env"
-        exec python3 "$root/lib/shed.py" update "$TOOLSHED_BIN_DIR" "$TOOLSHED_OPT_DIR" "$TOOLSHED_NVM_DIR" "$@"
+        delay=8
+        while (( $# )); do
+            case $1 in
+                --delay-days) (( $# > 1 )) || set -- "$1" ''; delay=$2; shift 2 ;;
+                --delay-days=*) delay=${1#*=}; shift ;;
+                *) printf 'Usage: shed update [--delay-days DAYS]\n' >&2; exit 2 ;;
+            esac
+        done
+        [[ $delay =~ ^[0-9]+$ ]] || { printf 'shed update: --delay-days must be a non-negative integer\n' >&2; exit 2; }
+        toolshed_init
+        shed_run update "$((10#$delay))"
         ;;
     installed)
         [[ $# == 1 ]] || { printf 'Usage: shed installed\n' >&2; exit 2; }
-        source "$root/env"
-        exec python3 "$root/lib/shed.py" "$1" "$TOOLSHED_BIN_DIR" "$TOOLSHED_OPT_DIR" "$TOOLSHED_NVM_DIR"
+        toolshed_init
+        shed_installed
         ;;
-    -h|--help|'') printf 'Usage: shed {available|installed|install TOOL...|update [--delay-days DAYS]|discover [TOOL...]}\n' ;;
-    *) printf 'Unknown command: %s\nUsage: shed {available|installed|install|update|discover}\n' "$1" >&2; exit 2 ;;
+    -h|--help|'') printf '%s\n' "$usage" ;;
+    *) printf 'Unknown command: %s\n%s\n' "$1" "$usage" >&2; exit 2 ;;
 esac

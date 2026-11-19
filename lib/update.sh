@@ -1,21 +1,18 @@
 #!/usr/bin/env bash
-# Discovery shares installer primitives, while ignoring installer-only overrides.
+# Discovery shares installer primitives. Sourcing only defines functions; entry points call `discovery_init`.
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/install.sh"
 source "$_installer_library_dir/tool.sh"
-unset TOOLSHED_OVERRIDE_TOOL_VERSION
-_toolshed_capture_peer=1
-_discovery_timestamp=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+source "$_installer_library_dir/records.sh"
+source "$_installer_library_dir/provenance.sh"
 
-# Record the first successful verification, without inventing historical provenance.
-record_provenance() {
-    local name=$1 key=$2 source_url=$3 peer_file=$4 timestamp
-    if [[ $name == claude ]]; then
-        python3 "$_installer_library_dir/discovery_records.py" record "$toolshed_root" "$name" "$key" '' "$_discovery_timestamp"
-    fi
-    timestamp=$(python3 "$_installer_library_dir/discovery_records.py" timestamp "$toolshed_root" "$name" "$key")
-    python3 "$_installer_library_dir/provenance.py" \
-        "$toolshed_root/metadata/provenance/$name.json" "$key" "$source_url" "$peer_file" "$timestamp"
+# Like toolshed_init, but ignore installer-only overrides and capture each download's peer and certificates.
+discovery_init() {
+    toolshed_init
+    unset TOOLSHED_OVERRIDE_TOOL_VERSION
+    _toolshed_capture_peer=1
+    _discovery_timestamp=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
 }
+
 github_release_info() {
     local repository=$1 tag_prefix=$2 output=$3 version
     _installer_download "https://api.github.com/repos/$repository/releases/latest" "$output.json"
@@ -29,13 +26,6 @@ github_release_asset_digest() {
     digest=$(jq -r --arg n "$2" '[.assets[] | select(.name == $n)] | if length == 1 then .[0].digest // "" else "" end' "$1.json")
     [[ $digest =~ ^sha256:[0-9a-f]{64}$ ]] || _installer_fail "Missing or invalid release digest for $2"
     printf '%s\n' "${digest#sha256:}"
-}
-check_recorded_checksums() {
-    python3 "$_installer_library_dir/discovery_records.py" check "$toolshed_root" "$1" "$2" "$3"
-}
-record_checksums() {
-    check_recorded_checksums "$1" "$2" "$3"
-    python3 "$_installer_library_dir/discovery_records.py" record "$toolshed_root" "$1" "$2" "$3" "$_discovery_timestamp"
 }
 # Store a license text once as metadata/license/<sha256>.txt, its short name in <sha256>.name.txt; set the
 # variable named by the third argument to the digest.

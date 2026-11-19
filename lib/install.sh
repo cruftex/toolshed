@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
-# Shared helpers for Bash installers. Source this file with `set -euo pipefail`.
+# Shared helpers for Bash installers. Sourcing only defines functions; entry points then call
+# `toolshed_init` (with `set -euo pipefail`) to load `env` and install the cleanup traps.
 
 _installer_library_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-source "$_installer_library_dir/../env"
-: "${TOOLSHED_DOWNLOAD_DIR:?}" "${TOOLSHED_BIN_DIR:?}" "${TOOLSHED_OPT_DIR:?}"
-
 declare -a _installer_temp_dirs=()
 
 _installer_cleanup() {
@@ -13,9 +11,15 @@ _installer_cleanup() {
         rm -rf -- "$directory"
     done
 }
-trap _installer_cleanup EXIT
-trap 'exit 130' INT
-trap 'exit 143' TERM
+
+# Load the configured directories and own temporary-file cleanup for this process.
+toolshed_init() {
+    source "$_installer_library_dir/../env"
+    : "${TOOLSHED_DOWNLOAD_DIR:?}" "${TOOLSHED_BIN_DIR:?}" "${TOOLSHED_OPT_DIR:?}"
+    trap _installer_cleanup EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+}
 
 _installer_fail() {
     printf 'Error: %s\n' "$*" >&2
@@ -158,9 +162,10 @@ download_verified() {
 _installer_download() {
     _installer_require curl
     if [[ ${_toolshed_capture_peer:-} == 1 ]]; then
+        # Peer file: remote IP, effective URL, then the server's certificate chain (curl's %{certs}).
         local peer
         peer=$(curl --fail --location --silent --show-error --proto '=https' --proto-redir '=https' \
-            --connect-timeout 15 --max-time 600 --write-out '%{remote_ip}\n%{url_effective}\n' "$1" --output "$2") || return
+            --connect-timeout 15 --max-time 600 --write-out '%{remote_ip}\n%{url_effective}\n%{certs}' "$1" --output "$2") || return
         printf '%s\n' "$peer" > "$2.peer"
     else
         curl --fail --location --silent --show-error --proto '=https' --proto-redir '=https' \

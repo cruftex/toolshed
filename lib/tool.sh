@@ -3,22 +3,49 @@
 
 toolshed_root=$(cd -- "$_installer_library_dir/.." && pwd)
 declare -gA tool=()
+declare -ga tool_keys=()
 
-# Source tools/NAME.sh for its hooks and move its key=value settings into the `tool` array.
+# Print the top-level KEY=VALUE settings of descriptor FILE, one level of quotes removed, without sourcing it.
+descriptor_settings() {
+    local line value
+    while IFS= read -r line; do
+        [[ $line =~ ^([a-z_][a-z0-9_]*)=(.*)$ ]] || continue
+        value=${BASH_REMATCH[2]}
+        value=${value#[\'\"]}
+        printf '%s=%s\n' "${BASH_REMATCH[1]}" "${value%[\'\"]}"
+    done < "$1"
+}
+
+# Print KEY's value from descriptor FILE (the `tool` array stays intact), or DEFAULT.
+descriptor_value() {
+    local setting value=$3
+    while IFS= read -r setting; do
+        [[ $setting != "$2="* ]] || value=${setting#*=}
+    done < <(descriptor_settings "$1")
+    printf '%s\n' "$value"
+}
+
+# Fill the `tool` array with NAME's settings and defaults without sourcing the descriptor (no hooks are defined);
+# `tool_keys` lists the keys the descriptor sets.
+tool_settings() {
+    local name=$1 setting
+    [[ $name =~ ^[a-z0-9][a-z0-9-]*$ ]] || _installer_fail "Invalid tool name: $name"
+    [[ -f $toolshed_root/tools/$name.sh ]] || _installer_fail "Unknown tool: $name"
+    tool=([name]=$name [executable]=$name [table]=$name [archive]=tar.gz [license_file]=LICENSE
+          [platforms]=linux-x64 [version_args]=--version [version_match]='*{version}*' [detect]=run)
+    tool_keys=()
+    while IFS= read -r setting; do
+        tool[${setting%%=*}]=${setting#*=}
+        tool_keys+=("${setting%%=*}")
+    done < <(descriptor_settings "$toolshed_root/tools/$name.sh")
+}
+
+# Load NAME's settings into `tool` and source tools/NAME.sh for its hooks, dropping the variables its settings define.
 load_tool() {
-    local _tool_name=$1 _tool_file _tool_line _tool_key
-    local -a _tool_keys=()
-    [[ $_tool_name =~ ^[a-z0-9][a-z0-9-]*$ ]] || _installer_fail "Invalid tool name: $_tool_name"
-    _tool_file="$toolshed_root/tools/$_tool_name.sh"
-    [[ -f $_tool_file ]] || _installer_fail "Unknown tool: $_tool_name"
-    while IFS= read -r _tool_line; do
-        [[ $_tool_line =~ ^([a-z_][a-z0-9_]*)= ]] && _tool_keys+=("${BASH_REMATCH[1]}")
-    done < "$_tool_file"
-    source "$_tool_file"
-    tool=([name]=$_tool_name [executable]=$_tool_name [table]=$_tool_name [archive]=tar.gz
-          [license_file]=LICENSE [platforms]=linux-x64 [version_args]=--version [version_match]='*{version}*')
-    for _tool_key in "${_tool_keys[@]}"; do
-        tool[$_tool_key]=${!_tool_key}
+    local _tool_key
+    tool_settings "$1"
+    source "$toolshed_root/tools/$1.sh"
+    for _tool_key in "${tool_keys[@]}"; do
         unset "$_tool_key"
     done
 }

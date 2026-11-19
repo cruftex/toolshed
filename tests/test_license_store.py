@@ -17,7 +17,7 @@ class LicenseStoreTests(unittest.TestCase):
     def store(self, text, name):
         source = self.root / 'source.txt'
         source.write_bytes(text)
-        script = 'source "$1"; toolshed_root=$2; store_license "$3" "$4" digest; printf "%s\\n" "$digest"'
+        script = 'source "$1"; toolshed_init; toolshed_root=$2; store_license "$3" "$4" digest; printf "%s\\n" "$digest"'
         return subprocess.run(['bash', '-c', script, '_', LIBRARY, self.root, source, name], capture_output=True, text=True)
 
     def test_store_is_deduplicated_by_content(self):
