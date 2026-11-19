@@ -5,17 +5,23 @@
 # Set record_table, record_version and record_artifact for NAME (a tool or component alias such as
 # codex-code-mode-host) and KEY (VERSION/PLATFORM or VERSION/license).
 record_location() {
-    local name=$1 platform=${2#*/} owner=$1 component='' file pair archive
+    local name=$1 platform=${2#*/} owner=$1 component='' found file archive
+    local -A settings=()
     [[ $2 == */* && $platform != */* ]] || _installer_fail "Invalid discovery key: $2"
     record_version=${2%%/*}
-    for file in "$toolshed_root"/tools/*.sh; do
-        for pair in $(descriptor_value "$file" components ''); do
-            [[ ${pair#*=} != "$name" ]] || { owner=$(basename -- "$file" .sh); component=${pair%%=*}; }
-        done
-    done
+    # One pass over all descriptors: the first `components=` pair COMPONENT=ALIAS naming NAME gives its owner.
+    found=$(awk -v name="$name" '/^components=/ {
+            value = substr($0, 12); gsub(/[\047"]/, "", value)
+            n = split(value, pairs, " ")
+            for (i = 1; i <= n; i++) if (substr(pairs[i], index(pairs[i], "=") + 1) == name) {
+                file = FILENAME; sub(/.*\//, "", file); sub(/\.sh$/, "", file)
+                print file, substr(pairs[i], 1, index(pairs[i], "=") - 1); exit
+            } }' "$toolshed_root"/tools/*.sh)
+    [[ -z $found ]] || read -r owner component <<< "$found"
     file="$toolshed_root/tools/$owner.sh"
     [[ -f $file ]] || _installer_fail "Unknown tool: $owner"
-    record_table="$toolshed_root/metadata/artifacts/$(descriptor_value "$file" table "$owner").psv"
+    descriptor_read "$file" settings
+    record_table="$toolshed_root/metadata/artifacts/${settings[table]-$owner}.psv"
     if [[ $platform == license ]]; then
         record_artifact="$component/license"
         return
@@ -24,7 +30,7 @@ record_location() {
     platform=${platform/darwin_/darwin-}
     platform=${platform/amd64/x64}
     platform=${platform/arm64/aarch64}
-    archive=$(descriptor_value "$file" archive tar.gz)
+    archive=${settings[archive]-tar.gz}
     [[ $archive == binary ]] || archive="archive/$archive"
     record_artifact="$component/$platform/$archive"
 }

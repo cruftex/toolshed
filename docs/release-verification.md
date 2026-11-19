@@ -82,6 +82,12 @@ the [Linux ARM64 binary](https://downloads.claude.ai/claude-code-releases/2.1.32
 has SHA-256 `7b6e484b1989a5a14a4b354709ccc8672518a3ec5b9ccd7981fc6254327fde67`.
 The ARM64 binary was checksum-verified but not executed on the x64 host.
 
+Claude Code checksums recorded on 2026-11-19 (discovery path, Linux x86_64 host): for 2.1.325, 2.1.326 and 2.1.327 the
+versioned manifests were authenticated with fingerprint `31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE`, both executables were
+downloaded, and each recorded SHA-256 in `metadata/artifacts/claude.psv` equals the manifest checksum and the local hash.
+The 2.1.325 values match the ones above. Since then Claude installs verify the recorded SHA-256 like every other tool;
+an offline install of 2.1.325 from the cache, a repeat install, and a modified-binary repair passed without network access.
+
 Codex smoke test on 2026-11-13, Linux x86_64: the locally calculated archive
 SHA-256 values matched GitHub's release digests:
 

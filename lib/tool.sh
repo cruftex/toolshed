@@ -5,39 +5,40 @@ toolshed_root=$(cd -- "$_installer_library_dir/.." && pwd)
 declare -gA tool=()
 declare -ga tool_keys=()
 
-# Print the top-level KEY=VALUE settings of descriptor FILE, one level of quotes removed, without sourcing it.
-descriptor_settings() {
-    local line value
-    while IFS= read -r line; do
-        [[ $line =~ ^([a-z_][a-z0-9_]*)=(.*)$ ]] || continue
-        value=${BASH_REMATCH[2]}
-        value=${value#[\'\"]}
-        printf '%s=%s\n' "${BASH_REMATCH[1]}" "${value%[\'\"]}"
+# Read the top-level KEY=VALUE settings of descriptor FILE into associative array ARRAY, one level of quotes
+# removed, without sourcing the file or starting a subshell.
+descriptor_read() {
+    local -n _descriptor=$2
+    local _line _value
+    while IFS= read -r _line; do
+        [[ $_line =~ ^([a-z_][a-z0-9_]*)=(.*)$ ]] || continue
+        _value=${BASH_REMATCH[2]}
+        _value=${_value#[\'\"]}
+        _descriptor[${BASH_REMATCH[1]}]=${_value%[\'\"]}
     done < "$1"
 }
 
 # Print KEY's value from descriptor FILE (the `tool` array stays intact), or DEFAULT.
 descriptor_value() {
-    local setting value=$3
-    while IFS= read -r setting; do
-        [[ $setting != "$2="* ]] || value=${setting#*=}
-    done < <(descriptor_settings "$1")
-    printf '%s\n' "$value"
+    local -A _values=()
+    descriptor_read "$1" _values
+    printf '%s\n' "${_values[$2]-$3}"
 }
 
 # Fill the `tool` array with NAME's settings and defaults without sourcing the descriptor (no hooks are defined);
 # `tool_keys` lists the keys the descriptor sets.
 tool_settings() {
-    local name=$1 setting
+    local name=$1 key
+    local -A settings=()
     [[ $name =~ ^[a-z0-9][a-z0-9-]*$ ]] || _installer_fail "Invalid tool name: $name"
     [[ -f $toolshed_root/tools/$name.sh ]] || _installer_fail "Unknown tool: $name"
+    descriptor_read "$toolshed_root/tools/$name.sh" settings
     tool=([name]=$name [executable]=$name [table]=$name [archive]=tar.gz [license_file]=LICENSE
           [platforms]=linux-x64 [version_args]=--version [version_match]='*{version}*' [detect]=run)
-    tool_keys=()
-    while IFS= read -r setting; do
-        tool[${setting%%=*}]=${setting#*=}
-        tool_keys+=("${setting%%=*}")
-    done < <(descriptor_settings "$toolshed_root/tools/$name.sh")
+    tool_keys=("${!settings[@]}")
+    for key in "${tool_keys[@]}"; do
+        tool[$key]=${settings[$key]}
+    done
 }
 
 # Load NAME's settings into `tool` and source tools/NAME.sh for its hooks, dropping the variables its settings define.
