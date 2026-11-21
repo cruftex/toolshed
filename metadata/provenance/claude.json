@@ -1,4 +1,34 @@
 {
+  "2.1.330/linux-aarch64": {
+    "checksum_url": "https://downloads.claude.ai/claude-code-releases/2.1.330/manifest.json",
+    "discovered_at": "2026-11-21T11:28:19Z",
+    "effective_url": "https://downloads.claude.ai/claude-code-releases/2.1.330/manifest.json",
+    "peer_ip": "35.190.46.17",
+    "tls": {
+      "subject": "CN=downloads.claude.ai",
+      "issuer": "CN=WR3,O=Google Trust Services,C=US",
+      "serial": "b3362b444a6575b512228a9fa37496b8",
+      "not_before": "2026-11-02T12:43:34Z",
+      "not_after": "2027-01-31T13:39:29Z",
+      "sha256": "82de10595fd89ddf2f7b37a65cea979d1264f35584a070dd56b85b6f171e9304",
+      "issuer_sha256": "2fe357db13751ff9160e87354975b3407498f41c9bd16a48657866e6e5a9b4c7"
+    }
+  },
+  "2.1.330/linux-x64": {
+    "checksum_url": "https://downloads.claude.ai/claude-code-releases/2.1.330/manifest.json",
+    "discovered_at": "2026-11-21T11:28:19Z",
+    "effective_url": "https://downloads.claude.ai/claude-code-releases/2.1.330/manifest.json",
+    "peer_ip": "35.190.46.17",
+    "tls": {
+      "subject": "CN=downloads.claude.ai",
+      "issuer": "CN=WR3,O=Google Trust Services,C=US",
+      "serial": "b3362b444a6575b512228a9fa37496b8",
+      "not_before": "2026-11-02T12:43:34Z",
+      "not_after": "2027-01-31T13:39:29Z",
+      "sha256": "82de10595fd89ddf2f7b37a65cea979d1264f35584a070dd56b85b6f171e9304",
+      "issuer_sha256": "2fe357db13751ff9160e87354975b3407498f41c9bd16a48657866e6e5a9b4c7"
+    }
+  },
   "2.1.329/linux-aarch64": {
     "checksum_url": "https://downloads.claude.ai/claude-code-releases/2.1.329/manifest.json",
     "discovered_at": "2026-11-20T11:56:36Z",
