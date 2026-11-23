@@ -80,11 +80,26 @@ select_install_version() {
     fi
 }
 
+# The artifact table of TOOL (in toolshed_root when lib/tool.sh is loaded).
+artifact_table() {
+    printf '%s/metadata/artifacts/%s.psv\n' "${toolshed_root:-$_installer_library_dir/..}" "$1"
+}
+
 artifact_checksum() {
     local tool=$1 version=$2 artifact=$3
     awk -F'|' -v v="$version" -v a="$artifact" '$1 == v && $2 == a {n++; d = $3}
-        END {if (n != 1 || d !~ /^[0-9a-f]{64}$/) exit 1; print d}' "$_installer_library_dir/../metadata/artifacts/$tool.psv" ||
+        END {if (n != 1 || d !~ /^[0-9a-f]{64}$/) exit 1; print d}' "$(artifact_table "$tool")" ||
         { printf 'Cannot select artifact checksum: %s %s %s\n' "$tool" "$version" "$artifact" >&2; return 1; }
+}
+
+# Print the download URL recorded for TOOL's VERSION and ARTIFACT in the optional fifth column, or nothing.
+artifact_url() {
+    local tool=$1 version=$2 artifact=$3 table
+    table=$(artifact_table "$tool")
+    [[ -f $table ]] || return 0
+    awk -F'|' -v v="$version" -v a="$artifact" '$1 == v && $2 == a {n++; u = $5}
+        END {if (n > 1 || u !~ /^(https:\/\/[^ \t|]+)?$/) exit 1; print u}' "$table" ||
+        { printf 'Cannot select artifact URL: %s %s %s\n' "$tool" "$version" "$artifact" >&2; return 1; }
 }
 
 load_archive_checksum() {

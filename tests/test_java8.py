@@ -58,14 +58,14 @@ while (($#)); do
 done
 echo "$url" >> "$TEST_LOG"
 case $url in
- https://api.adoptium.net/*) printf '[{"version":{"semver":"8.0.514+1"},"binary":{"image_type":"jdk","os":"linux","architecture":"x64","heap_size":"normal","package":{"name":"OpenJDK8U-jdk_x64_linux_hotspot_8u514b01.tar.gz","checksum":"%s"}}}]' "$TEST_DIGEST" > "$out" ;;
+ https://api.adoptium.net/*) printf '[{"version":{"semver":"8.0.514+1"},"binary":{"image_type":"jdk","os":"linux","architecture":"x64","heap_size":"normal","package":{"name":"OpenJDK8U-jdk_x64_linux_hotspot_8u514b01.tar.gz","link":"%s","checksum":"%s"}}}]' "$TEST_LINK" "$TEST_DIGEST" > "$out" ;;
  *) cp "$TEST_ARCHIVE" "$out" ;;
 esac
 ''')
         curl.chmod(0o755)
         self.log = self.root / 'downloads.log'
         self.env = dict(os.environ, PATH=f'{commands}:{os.environ["PATH"]}', TEST_ARCHIVE=str(self.archive),
-                        TEST_DIGEST=self.digest, TEST_LOG=str(self.log))
+                        TEST_DIGEST=self.digest, TEST_LOG=str(self.log), TEST_LINK=URL)
 
     def run_tool(self, action, tool, **env):
         return subprocess.run([self.repo / f'lib/{action}-tool.sh', tool], cwd=self.root, env=dict(self.env, **env),
@@ -127,22 +127,36 @@ esac
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, '8.0.514\n')
         self.assertEqual((self.repo / 'pins/java8').read_text(), '8.0.514\n')
-        self.assertEqual((self.repo / 'metadata/java8-builds').read_text(), '8.0.514 01\n')
+        self.assertFalse((self.repo / 'metadata/java8-builds').exists())
         licenses = list((self.repo / 'metadata/license').glob('*.name.txt'))
         self.assertEqual([path.read_text() for path in licenses], ['gpl-2.0-classpath\n'])
-        self.assertIn('8.0.514|/license|' + licenses[0].name.split('.')[0], self.table.read_text())
+        rows = self.table.read_text()
+        self.assertIn('8.0.514|/license|' + licenses[0].name.split('.')[0], rows)
+        self.assertIn(f'|{self.digest}|', rows)
+        self.assertTrue(rows.endswith(f'|{URL}\n'), rows)
+        self.assertEqual(self.downloads()[1:], [URL])
         self.assertFalse(self.bin.exists())
 
-    def test_reject_unpinned_version_and_build(self):
+    def test_discovery_rejects_unexpected_download_link(self):
+        before = self.table.read_text()
+        for link in ('https://example.com/OpenJDK8U-jdk_x64_linux_hotspot_8u514b01.tar.gz',
+                     URL.replace('jdk8u514-b01', 'jdk8u514-b02')):
+            result = self.run_tool('discover', 'java8', TEST_LINK=link)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('Invalid Temurin release metadata', result.stderr)
+        self.assertEqual(self.table.read_text(), before)
+        self.assertEqual(self.downloads(), ['https://api.adoptium.net/v3/assets/latest/8/hotspot?architecture=x64&image_type=jdk&os=linux&vendor=eclipse'] * 2)
+
+    def test_reject_unpinned_version_and_missing_url(self):
         result = self.run_tool('install', 'java8', TOOLSHED_OVERRIDE_TOOL_VERSION='8.0.512')
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('No pinned', result.stderr)
         result = self.run_tool('install', 'java8', TOOLSHED_OVERRIDE_TOOL_VERSION='25.0.5')
         self.assertNotEqual(result.returncode, 0)
-        (self.repo / 'metadata/java8-builds').write_text('')
+        self.table.write_text(self.table.read_text().replace('|' + URL, '|'))
         result = self.run_tool('install', 'java8')
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn('No pinned Temurin build', result.stderr)
+        self.assertIn('No recorded URL for java8 8.0.514/linux-x64', result.stderr)
         self.assertFalse(self.opt.exists())
         self.assertEqual(self.downloads(), [])
 

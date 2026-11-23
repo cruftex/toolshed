@@ -35,27 +35,32 @@ record_location() {
     record_artifact="$component/$platform/$archive"
 }
 
-# Print FIELD (3 = sha256, 4 = discovered_at) of the located record. Status 1: no record, 2: duplicates.
+# Print FIELD (3 = sha256, 4 = discovered_at, 5 = url) of the located record. Status 1: no record, 2: duplicates.
 recorded_field() {
     [[ -f $record_table ]] || return 1
     awk -F'|' -v v="$record_version" -v a="$record_artifact" -v f="$1" \
         '$1 == v && $2 == a {print $f; n++} END {exit n > 1 ? 2 : !n}' "$record_table"
 }
 
-# Fail if NAME's KEY already has a different recorded SHA256 (an empty recorded digest is not yet known).
+# Fail if NAME's KEY already has a different recorded SHA256, or a different recorded URL when URL is given
+# (empty recorded values are not yet known).
 check_recorded_checksums() {
     local recorded status=0
     record_location "$1" "$2"
     recorded=$(recorded_field 3) || status=$?
     (( status != 2 )) || _installer_fail "Duplicate artifact metadata: $1 $2"
     (( status != 0 )) || [[ -z $recorded || $recorded == "$3" ]] || _installer_fail "Conflicting archive metadata: $1 $2"
+    if [[ ${4:-} ]] && (( status == 0 )); then
+        recorded=$(recorded_field 5)
+        [[ -z $recorded || $recorded == "$4" ]] || _installer_fail "Conflicting archive URL: $1 $2"
+    fi
 }
 
-# Record NAME's KEY with SHA256, keeping an existing discovery time.
+# Record NAME's KEY with SHA256 and optionally its download URL, keeping an existing discovery time.
 record_checksums() {
-    check_recorded_checksums "$1" "$2" "$3"
+    check_recorded_checksums "$1" "$2" "$3" "${4:-}"
     python3 "$_installer_library_dir/artifact_metadata.py" record \
-        "$record_table" "$record_version" "$record_artifact" "$3" "$_discovery_timestamp"
+        "$record_table" "$record_version" "$record_artifact" "$3" "$_discovery_timestamp" ${4:+"$4"}
 }
 
 # Print the authoritative discovery time of NAME's KEY.

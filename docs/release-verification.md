@@ -12,7 +12,8 @@ License: GPLv2 with the Classpath Exception, from the archive's `legal/java.base
 [archive](https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.5%2B8/OpenJDK25U-jdk_x64_linux_hotspot_25.0.5_8.tar.gz)
 had locally calculated SHA-256 `68982529869257d0ee6b824ec5aa270ff8b118bb438670da0b97ebdab178d7fb`,
 matching Adoptium's published checksum. Smoke test 2026-11-15: installed twice from a verified cache;
-the second run skipped the matching installation. The build number is pinned in `metadata/java25-builds`.
+the second run skipped the matching installation. The download URL, which carries the build number, is recorded
+in `metadata/artifacts/java25.psv`.
 `shed discover java25` reads Adoptium's latest-release API and records the digest without moving the pin.
 
 ### Eclipse Temurin Java 8 (`java8`)
@@ -25,8 +26,8 @@ so it shares `metadata/license/4b9abebc….txt`.
 `TOOLSHED_BIN_DIR`, leaving Java 25's `java`/`javac` links unchanged; source `profile.d/java8.sh` to set `JAVA_HOME`.
 The [archive](https://github.com/adoptium/temurin8-binaries/releases/download/jdk8u514-b01/OpenJDK8U-jdk_x64_linux_hotspot_8u514b01.tar.gz)
 had locally calculated SHA-256 `27eda854481d20806d918b30cdd417c6bed4fd15882e24f3595dc8ae7fb5d095`, matching both
-Adoptium's API checksum and the release's published `.sha256.txt`. The build number (`01`) is pinned in
-`metadata/java8-builds`. Validation checks that `java -version` reports `openjdk version "1.8.0_514"` and
+Adoptium's API checksum and the release's published `.sha256.txt`. The download URL, which carries the build
+number (`01`), is recorded in `metadata/artifacts/java8.psv`. Validation checks that `java -version` reports `openjdk version "1.8.0_514"` and
 `javac -version` reports `javac 1.8.0_514` (Java 8 prints both on stderr and has no `--version`).
 Smoke test 2026-11-23, in temporary bin/opt directories with spaces, run from another directory with `curl`
 blocked: Java 25 and Java 8 installed offline from the verified cache, a repeat install skipped the existing

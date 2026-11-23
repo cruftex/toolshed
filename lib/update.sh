@@ -98,8 +98,10 @@ publisher_checksum() {
 validate_discovered() {
     local archive=$1 version=$2 platform=$3 staging=$4 binary root
     if [[ ${tool[kind]} == opt ]]; then
-        tar -xzf "$archive" -C "$staging" || _installer_fail "Cannot extract ${tool[name]} archive."
-        root=$(tool_expand "${tool[root]}" "$version" "$platform")
+        mkdir -- "$staging/extracted"
+        tar -xzf "$archive" -C "$staging/extracted" || _installer_fail "Cannot extract ${tool[name]} archive."
+        tool_root "$staging/extracted" "$version" "$platform" root
+        root="extracted/$root"
         ! has_hook tool_prepare || tool_prepare "$staging/$root"
         validate_tool "$staging/$root" "$version"
     else
@@ -123,7 +125,8 @@ discover_tool() {
     [[ " ${platforms[*]} " == *" $host "* ]] || _installer_fail "$name discovery supports ${platforms[*]} only."
     _installer_require python3 jq sha256sum tar
     stage_directory staging
-    declare -gA discovered=()
+    # A tool_latest hook may set the publisher's digest and download URL per platform; a URL set here is recorded.
+    declare -gA discovered=() discovered_url=()
     if has_hook tool_latest; then
         tool_latest "$staging"
     else
@@ -134,10 +137,11 @@ discover_tool() {
     fi
     ! has_hook tool_vars || tool_vars "$version"
     for platform in "${platforms[@]}"; do
-        url=$(tool_url "$version" "$platform")
+        if [[ ${discovered_url[$platform]:-} ]]; then url=${discovered_url[$platform]}
+        else url=$(tool_url "$version" "$platform"); fi
         if [[ ${discovered[$platform]:-} ]]; then checksum=${discovered[$platform]}
         else publisher_checksum "$url" "$staging"; fi
-        check_recorded_checksums "$name" "$version/$platform" "$checksum"
+        check_recorded_checksums "$name" "$version/$platform" "$checksum" "${discovered_url[$platform]:-}"
         archive=$(cache_path "$url" "$platform")
         download_verified "$url" "$checksum" "$archive"
         discovered[$platform]=$checksum
@@ -147,7 +151,7 @@ discover_tool() {
         fi
     done
     for platform in "${platforms[@]}"; do
-        record_checksums "$name" "$version/$platform" "${discovered[$platform]}"
+        record_checksums "$name" "$version/$platform" "${discovered[$platform]}" "${discovered_url[$platform]:-}"
     done
     record_tool_license "$name" "$version" "$host_archive"
     ! has_hook tool_after_discovery || tool_after_discovery "$version"

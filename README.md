@@ -24,11 +24,11 @@ metadata changes with `./update-readme.sh`.
 <!-- tools-table:start -->
 | Tool | Latest recorded version | Install strategy |
 | --- | --- | --- |
-| [bun](tools/bun.sh) | 1.4.4 | Verified executable in bin |
-| [claude](tools/claude.sh) | 2.1.327 | Verified executable in bin; checksums from the signed manifest |
+| [bun](tools/bun.sh) | 1.4.5 | Verified executable in bin |
+| [claude](tools/claude.sh) | 2.1.330 | Verified executable in bin; checksums from the signed manifest |
 | [cloud-provider-kind](tools/cloud-provider-kind.sh) | 0.12.0 | Verified executable in bin |
 | [clusterctl](tools/clusterctl.sh) | 1.14.4 | Verified executable in bin |
-| [codex](tools/codex.sh) | 0.170.0 | Verified executables in bin |
+| [codex](tools/codex.sh) | 0.171.0 | Verified executables in bin |
 | [controller-gen](tools/controller-gen.sh) | 0.23.0 | Verified executable in bin |
 | [cosign](tools/cosign.sh) | 3.1.4 | Verified executable in bin |
 | [crane](tools/crane.sh) | 0.22.1 | Verified executable in bin |
@@ -119,8 +119,8 @@ mvn39 -v        # Java version: 1.8.0_514, vendor: Temurin
 mvn39 package
 ```
 
-Java 8 versions are recorded in Adoptium's `8.0.<update>` form (`8.0.514` is `8u514`); the build number
-is pinned in `metadata/java8-builds`.
+Java 8 versions are recorded in Adoptium's `8.0.<update>` form (`8.0.514` is `8u514`); the download URL,
+which also carries the build number, is recorded in `metadata/artifacts/java8.psv`.
 
 Maven installs provide `mvn39` and `mvn310` independently. The most recently
 run Maven installer also selects the `mvn` command. Maven Daemon's `mvnd`
@@ -170,7 +170,10 @@ are assigned directly and do not inherit exported overrides.
 Release metadata in `metadata/artifacts/` uses pipe-separated
 `version|artifact|sha256|discovered_at` rows. Artifact IDs contain the optional
 component name, target platform, and source type, such as `/linux-x64/binary`
-or `host/linux-x64/archive/tar.gz`. Claude's SHA-256 values come from its versioned
+or `host/linux-x64/archive/tar.gz`. Tables may add a fifth `url` column with the
+artifact's download URL, recorded by discovery when it cannot be derived from the version (the Temurin JDKs,
+whose URLs carry a build number); installs then download from that URL, and the download cache path follows
+from it. Like the digest, a recorded URL never changes. Claude's SHA-256 values come from its versioned
 manifest, which discovery authenticates with Anthropic's signing key before it
 downloads and checks each executable. Archive-backed single-executable
 installs verify the archive and compare its extracted bytes on repeat installs.

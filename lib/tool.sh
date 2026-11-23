@@ -76,17 +76,47 @@ tool_expand() {
     printf '%s' "$value"
 }
 
+# The artifact ID of VERSION on PLATFORM, optionally for a COMPONENT of the tool.
+tool_artifact() {
+    local platform=$1 component=${2:-}
+    if [[ ${tool[archive]} == binary ]]; then printf '%s\n' "$component/$platform/binary"
+    else printf '%s\n' "$component/$platform/archive/${tool[archive]}"; fi
+}
+
+# The download URL of VERSION on PLATFORM: the URL recorded in the artifact table, else the expanded `url` template.
+# With url=recorded the table must provide it.
 tool_url() {
-    local default='https://github.com/{repo}/releases/download/{tag}{version}/{asset}'
-    tool_expand "${tool[url]:-$default}" "$1" "$2"
+    local version=$1 platform=$2 recorded default='https://github.com/{repo}/releases/download/{tag}{version}/{asset}'
+    recorded=$(artifact_url "${tool[table]}" "$version" "$(tool_artifact "$platform")") || return 1
+    if [[ $recorded ]]; then
+        printf '%s' "$recorded"
+    elif [[ ${tool[url]:-} == recorded ]]; then
+        _installer_fail "No recorded URL for ${tool[name]} $version/$platform."
+    else
+        tool_expand "${tool[url]:-$default}" "$version" "$platform"
+    fi
 }
 
 # The recorded artifact for VERSION on PLATFORM, optionally for a COMPONENT of the tool.
 tool_checksum() {
-    local version=$1 platform=$2 component=${3:-} artifact
-    if [[ ${tool[archive]} == binary ]]; then artifact="$component/$platform/binary"
-    else artifact="$component/$platform/archive/${tool[archive]}"; fi
-    artifact_checksum "${tool[table]}" "$version" "$artifact"
+    artifact_checksum "${tool[table]}" "$1" "$(tool_artifact "$2" "${3:-}")"
+}
+
+# Set the variable named ROOT_VARIABLE to the package root inside extracted DIRECTORY: the expanded `root`
+# setting, or with root='*' the archive's single top-level directory.
+tool_root() {
+    local _directory=$1 _version=$2 _platform=$3
+    local -n _tool_root=$4
+    local -a _entries=()
+    if [[ ${tool[root]:-} == '*' ]]; then
+        mapfile -t _entries < <(find "$_directory" -mindepth 1 -maxdepth 1 -printf '%f\n')
+        (( ${#_entries[@]} == 1 )) && [[ -d $_directory/${_entries[0]} && ! -L $_directory/${_entries[0]} ]] ||
+            _installer_fail "Expected one top-level directory in the ${tool[name]} archive."
+        _tool_root=${_entries[0]}
+    else
+        _tool_root=$(tool_expand "${tool[root]}" "$_version" "$_platform")
+    fi
+    [[ -d $_directory/$_tool_root ]] || _installer_fail "Missing $_tool_root in ${tool[name]} archive."
 }
 
 select_tool_version() {
@@ -220,8 +250,7 @@ install_opt_tool() {
         mkdir -p -- "${home%/*}"
         stage_directory staging "${home%/*}"
         tar -xzf "$archive" -C "$staging" || _installer_fail "Cannot extract $name archive."
-        root=$(tool_expand "${tool[root]}" "$version" "$platform")
-        [[ -d $staging/$root ]] || _installer_fail "Missing $root in $name archive."
+        tool_root "$staging" "$version" "$platform" root
         ! has_hook tool_prepare || tool_prepare "$staging/$root"
         validate_tool "$staging/$root" "$version"
         [[ ! -e $home && ! -L $home ]] || _installer_fail "Destination appeared during staging: $home"

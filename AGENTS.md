@@ -72,6 +72,11 @@ use repository-recorded verification metadata.
   `components`, `platforms`, `platform_names`, `version_prefix`, `detect`, `discover`,
   `strategy`. Hooks: `tool_validate`, `tool_prepare`, `tool_vars`, `tool_before_install`,
   `tool_after_install`, `tool_latest`, `tool_license`, `tool_after_discovery`, `tool_install`, `tool_discover`.
+- When a download URL cannot be built from the version (such as a publisher build number), record it instead of
+  pinning side files: `tool_latest` sets `discovered_url[<platform>]` (validated against the expected pattern) and
+  discovery writes it to the optional fifth `url` column of `metadata/artifacts/<tool>.psv`. A recorded URL takes
+  precedence over the `url` template; `url=recorded` requires one. `root='*'` takes an `opt` archive's single
+  top-level directory as the package root.
 - Keep descriptors small and declarative; put reusable mechanics in `lib/install.sh`
   (primitives), `lib/tool.sh` (descriptor loading and the generic `bin`/`opt` flows),
   `lib/update.sh` (discovery), `lib/records.sh` (artifact-table lookups), `lib/provenance.sh` and `lib/shed.sh`

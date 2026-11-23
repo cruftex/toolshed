@@ -104,4 +104,35 @@ t_empty_digest_is_filled_once() {
         fail 'filled digest replaced'
 }
 
+t_url_is_recorded_once_and_read_back() {
+    echo "# a recorded URL adds the url column, is read back by artifact_url and never changes"
+    setup_repo
+    local url='https://example.com/demo-2.0.0%2B1.tar.gz' error
+    record_checksums demo 2.0.0/linux-x64 8888888888888888888888888888888888888888888888888888888888888888 "$url"
+    assert_eq "$(head -n 1 "$repo/metadata/artifacts/demo.psv")" 'version|artifact|sha256|discovered_at|url' header
+    assert_eq "$(artifact_url demo 2.0.0 /linux-x64/archive/tar.gz)" "$url" url
+    assert_eq "$(artifact_url demo 1.2.9 /linux-x64/archive/tar.gz)" '' 'row without URL'
+    assert_eq "$(artifact_url demo 7.0.0 /linux-x64/archive/tar.gz)" '' 'missing row'
+    assert_eq "$(artifact_url nope 1.0.0 /linux-x64/archive/tar.gz)" '' 'missing table'
+    record_location demo 2.0.0/linux-x64
+    assert_eq "$(recorded_field 5)" "$url" 'recorded field'
+    check_recorded_checksums demo 2.0.0/linux-x64 8888888888888888888888888888888888888888888888888888888888888888 "$url"
+    check_recorded_checksums demo 2.0.0/linux-x64 8888888888888888888888888888888888888888888888888888888888888888
+    error=$( (check_recorded_checksums demo 2.0.0/linux-x64 8888888888888888888888888888888888888888888888888888888888888888 \
+        https://example.com/other.tar.gz) 2>&1) && fail 'conflicting URL accepted'
+    [[ $error == *'Conflicting archive URL: demo 2.0.0/linux-x64'* ]] || fail "unexpected error: $error"
+    record_checksums demo 1.2.9/linux-x64 1111111111111111111111111111111111111111111111111111111111111111 https://example.com/old.tar.gz
+    assert_eq "$(artifact_url demo 1.2.9 /linux-x64/archive/tar.gz)" https://example.com/old.tar.gz 'filled URL'
+}
+
+t_artifact_url_rejects_ambiguous_or_invalid_rows() {
+    echo "# duplicate rows and malformed URLs are not used"
+    setup_repo
+    printf 'version|artifact|sha256|discovered_at|url\n2.0.0|/linux-x64/archive/tar.gz|%s||http://example.com/x\n' \
+        "$(printf '8%.0s' {1..64})" > "$repo/metadata/artifacts/demo.psv"
+    ! artifact_url demo 2.0.0 /linux-x64/archive/tar.gz 2>/dev/null || fail 'http URL accepted'
+    printf '2.0.0|/linux-x64/archive/tar.gz|||https://example.com/x\n' >> "$repo/metadata/artifacts/demo.psv"
+    ! artifact_url demo 2.0.0 /linux-x64/archive/tar.gz 2>/dev/null || fail 'duplicate rows accepted'
+}
+
 testsuite_main "$@"

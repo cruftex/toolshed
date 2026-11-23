@@ -2,6 +2,7 @@ import hashlib
 import io
 import os
 from pathlib import Path
+import re
 import shlex
 import shutil
 import subprocess
@@ -44,7 +45,7 @@ while (($#)); do
  shift
 done
 case $url in
- https://api.adoptium.net/*) printf '[{"version":{"semver":"25.0.5+8.0.LTS"},"binary":{"image_type":"jdk","os":"linux","architecture":"x64","heap_size":"normal","package":{"name":"OpenJDK25U-jdk_x64_linux_hotspot_25.0.5_8.tar.gz","checksum":"%s"}}}]' "$TEST_DIGEST" > "$out" ;;
+ https://api.adoptium.net/*) printf '[{"version":{"semver":"25.0.5+8.0.LTS"},"binary":{"image_type":"jdk","os":"linux","architecture":"x64","heap_size":"normal","package":{"name":"OpenJDK25U-jdk_x64_linux_hotspot_25.0.5_8.tar.gz","link":"%s","checksum":"%s"}}}]' "${TEST_LINK:-https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.5%2B8/OpenJDK25U-jdk_x64_linux_hotspot_25.0.5_8.tar.gz}" "$TEST_DIGEST" > "$out" ;;
  *) cp "$TEST_ARCHIVE" "$out" ;;
 esac
 ''')
@@ -83,7 +84,29 @@ esac
         licenses = list((self.repo / 'metadata/license').glob('*.name.txt'))
         self.assertEqual(len(licenses), 1)
         self.assertEqual(licenses[0].read_text(), 'gpl-2.0-classpath\n')
-        self.assertIn('25.0.5|/license|' + licenses[0].name.split('.')[0], (self.repo / 'metadata/artifacts/java25.psv').read_text())
+        rows = (self.repo / 'metadata/artifacts/java25.psv').read_text()
+        self.assertIn('25.0.5|/license|' + licenses[0].name.split('.')[0], rows)
+        self.assertIn('|https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.5%2B8/'
+                      'OpenJDK25U-jdk_x64_linux_hotspot_25.0.5_8.tar.gz\n', rows)
+        self.assertFalse((self.repo / 'metadata/java25-builds').exists())
+
+    def test_discovery_rejects_unexpected_download_link(self):
+        table = self.repo / 'metadata/artifacts/java25.psv'
+        before = table.read_text()
+        self.env['TEST_LINK'] = 'https://example.com/OpenJDK25U-jdk_x64_linux_hotspot_25.0.5_8.tar.gz'
+        result = self.run_tool('discover', 'java25')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Invalid Temurin release metadata', result.stderr)
+        self.assertEqual(table.read_text(), before)
+
+    def test_install_needs_recorded_url(self):
+        table = self.repo / 'metadata/artifacts/java25.psv'
+        table.write_text(re.sub(r'\|https://[^\n]*', '|', table.read_text()))
+        result = self.run_tool('install', 'java25')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('No recorded URL for java25 25.0.5/linux-x64', result.stderr)
+        self.assertFalse(self.cache.exists())
+        self.assertFalse(self.opt.exists())
 
     def test_reject_unpinned_version(self):
         (self.repo / 'pins/java25').write_text('25.0.6\n')
