@@ -47,6 +47,17 @@ class ArtifactMetadataTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'duplicate'):
                 metadata.read_artifacts(path)
 
+    def test_versions_of_any_known_scheme(self):
+        """Three to five dotted numbers (semver2, jdk-jep322); each tool's own scheme is checked in Bash."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'release.psv'
+            for version in ('25.0.5', '25.0.5.1', '25.0.5.1.2'):
+                metadata.record_artifact(path, version, '/linux-x64/binary', 'a' * 64, '')
+            self.assertEqual(len(metadata.read_artifacts(path)), 3)
+            for version in ('25', '25.0', '25.0.5.1.2.3', '25.0.5+8'):
+                with self.subTest(version=version), self.assertRaisesRegex(ValueError, 'invalid artifact key'):
+                    metadata.record_artifact(path, version, '/linux-x64/binary', 'a' * 64, '')
+
     def test_invalid_values_are_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / 'release.psv'

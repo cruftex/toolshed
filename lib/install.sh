@@ -59,24 +59,79 @@ verify_sha256() {
     _installer_check_sha256 "$1" "$2" || _installer_fail "SHA-256 verification failed: $1"
 }
 
+# Version schemes: how a tool writes its versions (descriptor setting `version_scheme`, default semver2), as
+# unanchored EREs; see "Version schemes" in README.md. All schemes are dotted numbers, so `sort -V` orders them
+# (missing parts count as zero).
+#   semver2     SemVer 2.0.0 version core MAJOR.MINOR.PATCH, without pre-release or build parts
+#   jdk-jep322  JEP 322 FEATURE.INTERIM.UPDATE[.PATCH[.EXTRA]], recorded with at least three parts (GA 25 is 25.0.0)
+declare -gA version_scheme_regex=(
+    [semver2]='[0-9]+\.[0-9]+\.[0-9]+'
+    [jdk-jep322]='[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+){0,2}'
+)
+
+# Print the loaded tool's version scheme, or semver2 when no tool is loaded.
+tool_version_scheme() {
+    local declaration
+    declaration=$(declare -p tool 2>/dev/null) || true
+    if [[ $declaration == 'declare -A'* ]]; then
+        printf '%s\n' "${tool[version_scheme]:-semver2}"
+    else
+        echo semver2
+    fi
+}
+
+# Print the unanchored ERE of SCHEME (default: the loaded tool's scheme); an unknown scheme fails.
+version_regex() {
+    local scheme=${1:-}
+    [[ $scheme ]] || scheme=$(tool_version_scheme)
+    [[ -n ${version_scheme_regex[$scheme]+x} ]] || _installer_fail "Unknown version scheme: $scheme"
+    printf '%s\n' "${version_scheme_regex[$scheme]}"
+}
+
+# Succeed if VERSION is valid in SCHEME (default: the loaded tool's scheme); an unknown scheme fails.
+version_valid() {
+    local scheme=${2:-}
+    [[ $scheme ]] || scheme=$(tool_version_scheme)
+    [[ -n ${version_scheme_regex[$scheme]+x} ]] || _installer_fail "Unknown version scheme: $scheme"
+    [[ $1 =~ ^${version_scheme_regex[$scheme]}$ ]]
+}
+
+# Print a recorded jdk-jep322 VERSION as the JDK reports it: JEP 322 omits trailing zero parts (25.0.0 is 25).
+jdk_display_version() {
+    local version=$1
+    while [[ $version =~ ^(.+)\.0$ ]]; do
+        version=${BASH_REMATCH[1]}
+    done
+    printf '%s\n' "$version"
+}
+
+# Print a JEP 322 version as recorded: padded with zero parts to at least three (25 is 25.0.0).
+jdk_recorded_version() {
+    local version=$1
+    while [[ $version != *.*.* ]]; do
+        version+=.0
+    done
+    printf '%s\n' "$version"
+}
+
 # Read repository-owned pins and paired archive/executable metadata.
 read_version_pin() {
     local value
     value=$(cat "$_installer_library_dir/../pins/$1")
-    [[ $value =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || _installer_fail "Invalid version pin: $1"
+    version_valid "$value" || _installer_fail "Invalid version pin: $1"
     printf '%s\n' "$value"
 }
 
 # An explicit environment selection does not change the repository pin.
 select_install_version() {
-    local tool=$1
+    local name=$1
     shift
     (( $# == 0 )) || _installer_fail 'Unexpected installer arguments.'
     if [[ ${TOOLSHED_OVERRIDE_TOOL_VERSION+x} ]]; then
-        [[ $TOOLSHED_OVERRIDE_TOOL_VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || _installer_fail 'Invalid TOOLSHED_OVERRIDE_TOOL_VERSION.'
+        version_valid "$TOOLSHED_OVERRIDE_TOOL_VERSION" || _installer_fail 'Invalid TOOLSHED_OVERRIDE_TOOL_VERSION.'
         printf '%s\n' "$TOOLSHED_OVERRIDE_TOOL_VERSION"
     else
-        read_version_pin "$tool"
+        read_version_pin "$name"
     fi
 }
 
@@ -223,7 +278,7 @@ resolve_latest_version() {
     stage_directory _latest_directory
     _installer_download "$1" "$_latest_directory/latest"
     _latest_value=$(cat -- "$_latest_directory/latest")
-    [[ $_latest_value =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || _installer_fail 'Invalid latest release version.'
+    version_valid "$_latest_value" || _installer_fail 'Invalid latest release version.'
     _latest_output=$_latest_value
 }
 
@@ -350,8 +405,10 @@ set_json_env() {
     mv -f -- "$temporary/settings.json" "$path"
 }
 
+# Succeed if JDK_HOME holds a JDK of recorded VERSION (compared in the form JEP 322 prints it).
 java_is_installed() {
-    local jdk_home=$1 expected=$2 output
+    local jdk_home=$1 expected output
+    expected=$(jdk_display_version "$2")
     [[ -x $jdk_home/bin/java && -x $jdk_home/bin/javac ]] || return 1
     output=$("$jdk_home/bin/java" --version) || return 1
     [[ $output == "java $expected "* || $output == "openjdk $expected "* ]] || return 1

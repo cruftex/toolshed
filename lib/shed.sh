@@ -3,7 +3,6 @@
 # Functions only; source after lib/install.sh and lib/tool.sh. Commands that touch installations need toolshed_init.
 
 declare -gA installed=()
-shed_version_pattern='(^|[^0-9.])([0-9]+\.[0-9]+\.[0-9]+)([^0-9.]|$)'
 
 # Print TEXT without leading and trailing whitespace.
 trim() {
@@ -12,9 +11,19 @@ trim() {
     printf '%s' "${text%"${text##*[![:space:]]}"}"
 }
 
-# Print the first standalone x.y.z in TEXT (not part of a longer dotted number), or nothing.
+# Print the first standalone version of SCHEME (default: the loaded tool's) in TEXT, not part of a longer dotted
+# number, in its recorded form; or nothing. JEP 322 versions are printed without trailing zero parts (25 for 25.0.0).
 version_in() {
-    if [[ $1 =~ $shed_version_pattern ]]; then printf '%s\n' "${BASH_REMATCH[2]}"; fi
+    local scheme=${2:-} body pattern
+    [[ $scheme ]] || scheme=$(tool_version_scheme)
+    case $scheme in
+        jdk-jep322) body='[0-9]+(\.[0-9]+){0,4}' ;;
+        *) body=$(version_regex "$scheme") || return ;;
+    esac
+    pattern="(^|[^0-9.])($body)([^0-9.]|$)"
+    [[ $1 =~ $pattern ]] || return 0
+    if [[ $scheme == jdk-jep322 ]]; then jdk_recorded_version "${BASH_REMATCH[2]}"
+    else printf '%s\n' "${BASH_REMATCH[2]}"; fi
 }
 
 # Print the highest of the versions on stdin (one per line), or nothing.
@@ -97,14 +106,16 @@ detect_version() {
             [[ -f $executable && -x $executable ]] || return 0
             path=$(readlink -f -- "$executable")
             home=$(readlink -m -- "$TOOLSHED_OPT_DIR/${tool[table]}")
-            if [[ $path == "$home"/* && ${path#"$home"/} =~ ^([0-9]+\.[0-9]+\.[0-9]+)/[^/]+/[^/]+$ ]]; then
-                printf '%s\n' "${BASH_REMATCH[1]}"
+            version=${path#"$home"/}
+            version=${version%%/*}
+            if [[ $path == "$home"/* && ${path#"$home"/} =~ ^[^/]+/[^/]+/[^/]+$ ]] && version_valid "$version"; then
+                printf '%s\n' "$version"
             else
                 echo '?'
             fi ;;
         dirs) # The newest version-named directory in <opt>/<table>.
             for path in "$TOOLSHED_OPT_DIR/${tool[table]}"/*; do
-                [[ ! ${path##*/} =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || versions+=("${path##*/}")
+                ! version_valid "${path##*/}" || versions+=("${path##*/}")
             done
             (( ${#versions[@]} == 0 )) || printf '%s\n' "${versions[@]}" | version_max ;;
         nvm)
@@ -186,12 +197,14 @@ move_pin() {
 
 # Print the pin and every recorded version of the loaded tool, ascending.
 recorded_versions() {
-    local table
+    local table version
     table=$(shed_table)
     {
         pinned_version "${tool[name]}"
         if [[ -f $table ]]; then awk -F'|' 'NR > 1 && $2 !~ /\/license$/ {print $1}' "$table"; fi
-    } | awk -v prefix="${tool[version_prefix]:-}" '/^[0-9]+\.[0-9]+\.[0-9]+$/ && index($0, prefix) == 1' | sort -uV
+    } | while IFS= read -r version; do
+        [[ $version != "${tool[version_prefix]:-}"* ]] || ! version_valid "$version" || printf '%s\n' "$version"
+    done | sort -uV
 }
 
 shed_available() {
@@ -291,7 +304,7 @@ shed_run() {
             echo "$name: installed $known; pin updated"
         else
             found=$(trim "$found")
-            if [[ ! $found =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            if ! version_valid "$found"; then
                 echo "$name: updater returned an invalid version" >&2
                 failures=1
             elif version_greater "$found" "$version"; then

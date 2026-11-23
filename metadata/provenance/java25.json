@@ -1,4 +1,19 @@
 {
+  "25.0.5.1/linux-x64": {
+    "checksum_url": "https://api.adoptium.net/v3/assets/latest/25/hotspot?architecture=x64&image_type=jdk&os=linux&vendor=eclipse",
+    "discovered_at": "2026-11-23T02:45:51Z",
+    "effective_url": "https://api.adoptium.net/v3/assets/latest/25/hotspot?architecture=x64&image_type=jdk&os=linux&vendor=eclipse",
+    "peer_ip": "104.18.20.66",
+    "tls": {
+      "subject": "CN=adoptium.net",
+      "issuer": "CN=WE1,O=Google Trust Services,C=US",
+      "serial": "725b9d3948345c7b0e7d32084721dce7",
+      "not_before": "2026-11-11T21:28:47Z",
+      "not_after": "2027-02-09T22:28:44Z",
+      "sha256": "27c6e9ab873a333310a1aacee13d8f714e61906417c222fdf017365527f750f9",
+      "issuer_sha256": "1dfc1605fbad358d8bc844f76d15203fac9ca5c1a79fd4857ffaf2864fbebf96"
+    }
+  },
   "25.0.5/linux-x64": {
     "checksum_url": "https://api.adoptium.net/v3/assets/latest/25/hotspot?architecture=x64&image_type=jdk&os=linux&vendor=eclipse",
     "discovered_at": "2026-11-16T11:48:00Z",

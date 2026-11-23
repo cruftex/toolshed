@@ -69,7 +69,7 @@ use repository-recorded verification metadata.
   (`tool_install`/`tool_discover` hooks do the work). Other keys: `repo`, `tag`, `url`,
   `asset`, `member`, `archive`, `root`, `home`, `links`, `executable`, `version_args`,
   `version_env`, `version_match`, `checksum`, `license`, `license_file`, `table`,
-  `components`, `platforms`, `platform_names`, `version_prefix`, `detect`, `discover`,
+  `components`, `platforms`, `platform_names`, `version_prefix`, `version_scheme`, `detect`, `discover`,
   `strategy`. Hooks: `tool_validate`, `tool_prepare`, `tool_vars`, `tool_before_install`,
   `tool_after_install`, `tool_latest`, `tool_license`, `tool_after_discovery`, `tool_install`, `tool_discover`.
 - When a download URL cannot be built from the version (such as a publisher build number), record it instead of
@@ -77,6 +77,13 @@ use repository-recorded verification metadata.
   discovery writes it to the optional fifth `url` column of `metadata/artifacts/<tool>.psv`. A recorded URL takes
   precedence over the `url` template; `url=recorded` requires one. `root='*'` takes an `opt` archive's single
   top-level directory as the package root.
+- `version_scheme` says how a tool writes its versions; pins, overrides, discovery and `shed` validate and parse
+  versions with it (`version_valid`, `version_regex` in `lib/install.sh`; `version_in` in `lib/shed.sh`).
+  `semver2` (default) is the SemVer 2.0.0 version core `X.Y.Z`, without pre-release or build parts. `jdk-jep322` is
+  JEP 322 with three to five parts (`25.0.5.1`), GA recorded as `25.0.0`; JDKs print it without trailing zero parts
+  (`jdk_display_version`). Every scheme is dotted numbers, so `sort -V` orders versions. Take versions from the
+  publisher's own fields, not a lossy form such as Adoptium's `semver` field (`25.0.5+100000002` for 25.0.5.1). Add a
+  scheme to `version_scheme_regex` when a product needs one, and document it in README's "Version schemes" section.
 - Keep descriptors small and declarative; put reusable mechanics in `lib/install.sh`
   (primitives), `lib/tool.sh` (descriptor loading and the generic `bin`/`opt` flows),
   `lib/update.sh` (discovery), `lib/records.sh` (artifact-table lookups), `lib/provenance.sh` and `lib/shed.sh`
@@ -115,7 +122,7 @@ use repository-recorded verification metadata.
 | Tool | Version | Platform | Descriptor |
 | --- | --- | --- | --- |
 | Bun | 1.4.4 | Linux x86_64, glibc | `tools/bun.sh` |
-| Eclipse Temurin Java | 25.0.5+8 | Linux x86_64, glibc | `tools/java25.sh` |
+| Eclipse Temurin Java | 25.0.5+8 (25.0.5.1+2 recorded) | Linux x86_64, glibc | `tools/java25.sh` |
 | Oracle Java | 25.0.5 | Linux x86_64, glibc | `tools/oracle-java25.sh` |
 | Eclipse Temurin Java | 8.0.514 (8u514-b01) | Linux x86_64, glibc | `tools/java8.sh` |
 

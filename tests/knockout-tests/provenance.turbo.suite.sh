@@ -128,6 +128,13 @@ t_canonical_order_is_numeric_newest_first() {
         '[["10.0.0/linux-x64","2.1.10/darwin-x64","2.1.10/linux-x64","2.1.9/linux-x64"],[],[],[],["a","b"]]' order
 }
 
+t_canonical_order_handles_four_part_versions() {
+    echo "# a patch release (25.0.5.1) is newer than its update (25.0.5) and older than the next update"
+    assert_eq "$(jq -n '{"25.0.5/linux-x64":{},"25.0.5.1/linux-x64":{},"25.0.6/linux-x64":{},"25.0.0/linux-x64":{}}' |
+        provenance_canonical | jq -c keys_unsorted)" \
+        '["25.0.6/linux-x64","25.0.5.1/linux-x64","25.0.5/linux-x64","25.0.0/linux-x64"]' order
+}
+
 t_repository_provenance_is_canonical() {
     echo "# every checked-in provenance file is in canonical order"
     local file

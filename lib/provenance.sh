@@ -2,10 +2,10 @@
 # Provenance records (metadata/provenance/<tool>.json): when, from where and over which TLS certificate each
 # release was first verified. Functions only; source after lib/install.sh and lib/records.sh. Needs jq and openssl.
 
-# jq filter: newest version first (numeric parts), then platform; keys sorted inside each entry. New releases
-# are thus prepended, so a discovery's diff only adds lines.
+# jq filter: newest version first (numeric parts, missing parts count as zero, so 25.0.5.1 precedes 25.0.5), then
+# platform; keys sorted inside each entry. New releases are thus prepended, so a discovery's diff only adds lines.
 _provenance_canonical='to_entries
-    | sort_by(.key | split("/") | [(.[0] | split(".") | map(-tonumber)), .[1]])
+    | sort_by(.key | split("/") | [(.[0] | split(".") | map(-tonumber) | . + [0, 0, 0, 0, 0] | .[:5]), .[1]])
     | map(.value |= (to_entries | sort_by(.key) | from_entries)) | from_entries'
 
 provenance_canonical() {

@@ -30,6 +30,18 @@ t_version_in_finds_standalone_versions() {
     assert_eq "$(version_in 'v24.1.0')" 24.1.0 node
     assert_eq "$(version_in 'build 1.2.3.4, release 5.6.7')" 5.6.7 dotted
     assert_eq "$(version_in 'none 1.2')" '' none
+    assert_eq "$(version_in 'openjdk 25.0.5.1 2026-11-18 LTS')" '' 'four parts are not semver2'
+}
+
+t_version_in_reads_jep322_versions() {
+    echo "# jdk-jep322: up to five parts, and the short GA form is padded to the recorded form"
+    assert_eq "$(version_in 'openjdk 25.0.5.1 2026-11-18 LTS' jdk-jep322)" 25.0.5.1 patch
+    assert_eq "$(version_in 'openjdk 25.0.5 2026-10-20 LTS' jdk-jep322)" 25.0.5 update
+    assert_eq "$(version_in 'openjdk 25 2025-09-16 LTS' jdk-jep322)" 25.0.0 GA
+    tool_settings java25
+    assert_eq "$(version_in 'openjdk 25.0.5.1 2026-11-18 LTS')" 25.0.5.1 'loaded tool'
+    assert_eq "$(printf '%s\n' 25.0.5 25.0.5.1 25.0.10 | version_max)" 25.0.10 max
+    assert_eq "$(printf '%s\n' 25.0.5 25.0.5.1 | version_max)" 25.0.5.1 'patch is newer'
 }
 
 t_version_status_compares_numerically() {
@@ -106,6 +118,16 @@ t_recorded_versions_lists_all_platforms() {
     assert_eq "$(recorded_versions | paste -sd, -)" 1.2.8,1.2.9,1.2.10 prefix
 }
 
+t_recorded_versions_follow_the_scheme() {
+    echo "# four-part versions are listed for jdk-jep322 tools only"
+    setup_shed
+    printf '1.2.10.1|/linux-x64/archive/tar.gz|aa|\n' >> "$repo/metadata/artifacts/demo.psv"
+    tool_settings demo
+    assert_eq "$(recorded_versions | paste -sd, -)" 1.2.9,1.2.10,1.3.0 semver2
+    tool[version_scheme]=jdk-jep322
+    assert_eq "$(recorded_versions | paste -sd, -)" 1.2.9,1.2.10,1.2.10.1,1.3.0 jdk-jep322
+}
+
 t_detect_run() {
     echo "# run: the version printed by the executable, ? on failure, nothing when absent"
     setup_shed
@@ -148,7 +170,18 @@ t_detect_link_and_dirs() {
     tool[detect]=dirs
     mkdir -p -- "$case_dir/opt/demo/1.0.10" "$case_dir/opt/demo/latest"
     assert_eq "$(detect_version)" 1.0.10 dirs
-    rm -rf -- "$case_dir/opt/demo"
+    mkdir -p -- "$case_dir/opt/demo/1.0.10.1"
+    assert_eq "$(detect_version)" 1.0.10 'dirs ignore four parts for semver2'
+    tool[version_scheme]=jdk-jep322
+    assert_eq "$(detect_version)" 1.0.10.1 'dirs with jdk-jep322'
+    script "$case_dir/opt/demo/1.0.10.1/bin/demo" 'exit 0'
+    ln -sfn -- "$case_dir/opt/demo/1.0.10.1/bin/demo" "$case_dir/bin/demo"
+    tool[detect]=link
+    assert_eq "$(detect_version)" 1.0.10.1 'link with jdk-jep322'
+    tool[version_scheme]=semver2
+    assert_eq "$(detect_version)" '?' 'link ignores four parts for semver2'
+    rm -rf -- "$case_dir/opt/demo" "$case_dir/bin/demo"
+    tool[detect]=dirs
     assert_eq "$(detect_version)" '' none
 }
 

@@ -34,7 +34,8 @@ tool_settings() {
     [[ -f $toolshed_root/tools/$name.sh ]] || _installer_fail "Unknown tool: $name"
     descriptor_read "$toolshed_root/tools/$name.sh" settings
     tool=([name]=$name [executable]=$name [table]=$name [archive]=tar.gz [license_file]=LICENSE
-          [platforms]=linux-x64 [version_args]=--version [version_match]='*{version}*' [detect]=run)
+          [platforms]=linux-x64 [version_args]=--version [version_match]='*{version}*' [detect]=run
+          [version_scheme]=semver2)
     tool_keys=("${!settings[@]}")
     for key in "${tool_keys[@]}"; do
         tool[$key]=${settings[$key]}

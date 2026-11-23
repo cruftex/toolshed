@@ -16,6 +16,16 @@ the second run skipped the matching installation. The download URL, which carrie
 in `metadata/artifacts/java25.psv`.
 `shed discover java25` reads Adoptium's latest-release API and records the digest without moving the pin.
 
+Temurin 25.0.5.1+2 is recorded as `25.0.5.1` (scheme `jdk-jep322`). Adoptium's API reports it as `openjdk_version`
+`25.0.5.1+2-LTS` with `patch: 1`, but as `semver` `25.0.5+100000002`, so discovery builds the version from the
+numeric fields and cross-checks it with `openjdk_version`, the release name, the package name and the link. The
+[archive](https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.5.1%2B2/OpenJDK25U-jdk_x64_linux_hotspot_25.0.5.1_2.tar.gz)
+had locally calculated SHA-256 `760f91b22c3efc9bd1b64ff950598231be82928cc807e30691a0e7a2995a62c0`, matching
+Adoptium's API checksum and the release's `.sha256.txt` (discovered 2026-11-23). Smoke test 2026-11-23, in temporary
+directories with spaces and `curl` blocked: `TOOLSHED_OVERRIDE_TOOL_VERSION=25.0.5.1` installed it from the
+verified cache under `$TOOLSHED_OPT_DIR/java25/25.0.5.1`, a repeat install skipped it, `java --version` reported
+`openjdk 25.0.5.1 2026-11-17 LTS`, and `shed installed` / `shed available` listed 25.0.5.1. The pin stays at 25.0.5.
+
 ### Eclipse Temurin Java 8 (`java8`)
 
 License: GPLv2 with the Classpath Exception, from the archive's top-level `LICENSE`; byte-identical to Java 25's,

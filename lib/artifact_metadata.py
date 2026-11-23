@@ -17,7 +17,9 @@ from pathlib import Path
 
 HEADER = ['version', 'artifact', 'sha256', 'discovered_at']
 URL_HEADER = HEADER + ['url']
-VERSION = re.compile(r'\d+\.\d+\.\d+\Z')
+# Any known version scheme (lib/install.sh `version_scheme_regex`): three to five dotted numbers. Each tool's own
+# scheme is enforced by the Bash installers.
+VERSION = re.compile(r'\d+(?:\.\d+){2,4}\Z')
 ARTIFACT = re.compile(r'(?:[a-zA-Z0-9._-]+)?/(?:license|[a-z0-9]+(?:[-_][a-z0-9]+)+/(?:binary|archive(?:/[a-z0-9._-]+)?))\Z')
 DIGEST = re.compile(r'[0-9a-f]{64}\Z')
 URL = re.compile(r'https://[^\s|]+\Z')

@@ -35,7 +35,7 @@ metadata changes with `./update-readme.sh`.
 | [go](tools/go.sh) | 1.27.4 | Verified package in opt; entry points in bin |
 | [golangci-lint](tools/golangci-lint.sh) | 2.15.0 | Verified executable in bin |
 | [helm](tools/helm.sh) | 4.3.2 | Verified executable in bin |
-| [java25](tools/java25.sh) | 25.0.5 | Eclipse Temurin; verified package in opt; entry points in bin; source [`profile.d/java25.sh`](profile.d/java25.sh) |
+| [java25](tools/java25.sh) | 25.0.5.1 | Eclipse Temurin; verified package in opt; entry points in bin; source [`profile.d/java25.sh`](profile.d/java25.sh) |
 | [java8](tools/java8.sh) | 8.0.514 | Eclipse Temurin; verified package in opt; activate with profile; source [`profile.d/java8.sh`](profile.d/java8.sh) |
 | [kind](tools/kind.sh) | 0.33.0 | Verified executable in bin |
 | [kubebuilder](tools/kubebuilder.sh) | 4.16.0 | Verified executable in bin |
@@ -85,6 +85,28 @@ Toolshed also provides cloud-provider-kind, kubebuilder, controller-gen,
 setup-envtest, golangci-lint, cosign, crane, trivy, and Mike Farah’s yq.
 setup-envtest downloads Kubernetes test assets separately when requested.
 
+## Version schemes
+
+Versions appear in pins, `TOOLSHED_OVERRIDE_TOOL_VERSION`, the artifact tables in `metadata/artifacts/`,
+discovery and every `shed` report. Toolshed has to validate them, read them from a tool's own output, and order
+them to decide whether an update exists. Products number their releases differently, so each descriptor declares
+its scheme with `version_scheme` (default `semver2`). Versions are recorded the way the product itself numbers them,
+never in a form that loses information.
+
+| Scheme | Accepts | Recorded as | Standard |
+| --- | --- | --- | --- |
+| `semver2` | `MAJOR.MINOR.PATCH`, e.g. `1.27.4`; the version core only, without pre-release (`-rc1`) or build (`+4`) parts, because toolshed records releases | as given | [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html) |
+| `jdk-jep322` | `FEATURE.INTERIM.UPDATE[.PATCH[.EXTRA]]`, three to five numbers, e.g. `25.0.5.1` | at least three parts: GA `25` is `25.0.0`; installed JDKs are compared in the printed form without trailing zeros (`25`) | [JEP 322: Time-Based Release Versioning](https://openjdk.org/jeps/322) |
+
+All schemes are dotted numbers compared part by part, with missing parts counting as zero
+(`25.0.5` < `25.0.5.1` < `25.0.6`).
+
+SemVer has exactly three numbers and cannot express a fourth one. A pre-release suffix sorts *before* the release,
+and build metadata is ignored when comparing. Temurin 25.0.5.1+2, a JDK patch release, shows the problem:
+Adoptium's API reports it as `25.0.5+100000002` in its `semver` field, which by SemVer's rules compares equal to
+25.0.5. Java 25 therefore uses `jdk-jep322` and records `25.0.5.1`. Java 8 predates JEP 322 and uses `semver2` with
+Adoptium's `8.0.<update>` form.
+
 ## Licenses
 
 Each tool version's license text is stored once in `metadata/license/<sha256>.txt`, with its short name in `<sha256>.name.txt`; the tool's
@@ -120,7 +142,9 @@ mvn39 package
 ```
 
 Java 8 versions are recorded in Adoptium's `8.0.<update>` form (`8.0.514` is `8u514`); the download URL,
-which also carries the build number, is recorded in `metadata/artifacts/java8.psv`.
+which also carries the build number, is recorded in `metadata/artifacts/java8.psv`. Java 25 versions may have
+four parts, e.g. `TOOLSHED_OVERRIDE_TOOL_VERSION=25.0.5.1 shed install java25`; see
+[Version schemes](#version-schemes).
 
 Maven installs provide `mvn39` and `mvn310` independently. The most recently
 run Maven installer also selects the `mvn` command. Maven Daemon's `mvnd`

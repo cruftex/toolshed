@@ -18,7 +18,7 @@ github_release_info() {
     _installer_download "https://api.github.com/repos/$repository/releases/latest" "$output.json"
     version=$(jq -er --arg p "$tag_prefix" 'select((.draft or .prerelease) | not) | .tag_name
         | select(startswith($p)) | ltrimstr($p)' "$output.json") || version=
-    [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || _installer_fail 'Invalid release metadata'
+    version_valid "$version" || _installer_fail 'Invalid release metadata'
     printf '%s\n' "$version" > "$output"
 }
 github_release_asset_digest() {
@@ -135,6 +135,7 @@ discover_tool() {
         provenance_url="https://api.github.com/repos/${tool[repo]}/releases/latest"
         provenance_peer="$staging/release.json.peer"
     fi
+    version_valid "${version:-}" || _installer_fail "Invalid $name release version: ${version:-}"
     ! has_hook tool_vars || tool_vars "$version"
     for platform in "${platforms[@]}"; do
         if [[ ${discovered_url[$platform]:-} ]]; then url=${discovered_url[$platform]}
