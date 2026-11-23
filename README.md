@@ -25,28 +25,29 @@ metadata changes with `./update-readme.sh`.
 | Tool | Latest recorded version | Install strategy |
 | --- | --- | --- |
 | [bun](tools/bun.sh) | 1.4.4 | Verified executable in bin |
-| [claude](tools/claude.sh) | 2.1.325 | Signed manifest; executable in bin |
+| [claude](tools/claude.sh) | 2.1.327 | Verified executable in bin; checksums from the signed manifest |
 | [cloud-provider-kind](tools/cloud-provider-kind.sh) | 0.12.0 | Verified executable in bin |
 | [clusterctl](tools/clusterctl.sh) | 1.14.4 | Verified executable in bin |
-| [codex](tools/codex.sh) | 0.169.0 | Verified executables in bin |
+| [codex](tools/codex.sh) | 0.170.0 | Verified executables in bin |
 | [controller-gen](tools/controller-gen.sh) | 0.23.0 | Verified executable in bin |
 | [cosign](tools/cosign.sh) | 3.1.4 | Verified executable in bin |
 | [crane](tools/crane.sh) | 0.22.1 | Verified executable in bin |
 | [go](tools/go.sh) | 1.27.4 | Verified package in opt; entry points in bin |
 | [golangci-lint](tools/golangci-lint.sh) | 2.15.0 | Verified executable in bin |
-| [helm](tools/helm.sh) | 3.19.0 | Verified executable in bin |
+| [helm](tools/helm.sh) | 4.3.2 | Verified executable in bin |
 | [java25](tools/java25.sh) | 25.0.5 | Eclipse Temurin; verified package in opt; entry points in bin; source [`profile.d/java25.sh`](profile.d/java25.sh) |
-| [kind](tools/kind.sh) | 0.30.0 | Verified executable in bin |
+| [java8](tools/java8.sh) | 8.0.514 | Eclipse Temurin; verified package in opt; activate with profile; source [`profile.d/java8.sh`](profile.d/java8.sh) |
+| [kind](tools/kind.sh) | 0.33.0 | Verified executable in bin |
 | [kubebuilder](tools/kubebuilder.sh) | 4.16.0 | Verified executable in bin |
-| [kubectl](tools/kubectl.sh) | 1.34.1 | Verified executable in bin |
+| [kubectl](tools/kubectl.sh) | 1.37.2 | Verified executable in bin |
 | [kustomize](tools/kustomize.sh) | 5.8.3 | Verified executable in bin |
-| [maven310](tools/maven310.sh) | 3.10.0 | Verified package in opt; entry points in bin |
+| [maven310](tools/maven310.sh) | 3.10.1 | Verified package in opt; entry points in bin |
 | [maven39](tools/maven39.sh) | 3.9.16 | Verified package in opt; entry points in bin |
 | [mvnd](tools/mvnd.sh) | 1.0.6 | Verified package in opt; entry points in bin |
 | [node24](tools/node24.sh) | 24.22.3 | Verified archive in NVM directory; source [`profile.d/node24.sh`](profile.d/node24.sh) |
 | [nvm](tools/nvm.sh) | 0.41.0 | Verified Git archive in NVM directory |
 | [oracle-java25](tools/oracle-java25.sh) | 25.0.5 | Oracle JDK; verified package in opt; activate with profile; source [`profile.d/oracle-java25.sh`](profile.d/oracle-java25.sh) |
-| [setup-envtest](tools/setup-envtest.sh) | 0.25.2 | Verified executable in bin |
+| [setup-envtest](tools/setup-envtest.sh) | 0.25.3 | Verified executable in bin |
 | [trivy](tools/trivy.sh) | 0.76.2 | Verified executable in bin |
 | [vegeta](tools/vegeta.sh) | 12.13.0 | Verified executable in bin |
 | [yq](tools/yq.sh) | 4.54.3 | Verified executable in bin |
@@ -101,10 +102,25 @@ Most commands are available in `TOOLSHED_BIN_DIR` after installation. Source
 `profile.d/node24.sh` to activate Node, or `profile.d/java25.sh` to set
 `JAVA_HOME` and activate Eclipse Temurin Java. Oracle JDK is installed by
 `shed install oracle-java25` into opt only (no `bin` links); source
-`profile.d/oracle-java25.sh` to use it. Source `belts/n24j25.sh` to activate both in the
+`profile.d/oracle-java25.sh` to use it. Source `belts/n24j25.sh` to activate Node 24 and Java 25 in the
 current shell. These scripts do not install missing tools.
 The profiles select the pinned versions, including after an installation with
 an override.
+
+Eclipse Temurin Java 8 (`shed install java8`) is a full JDK (compiler and runtime) installed into
+`$TOOLSHED_OPT_DIR/java8/<version>` only; it adds no `bin` links, so `java` and `javac` in
+`TOOLSHED_BIN_DIR` stay with Java 25. Opt in per shell by sourcing `profile.d/java8.sh`, which sets
+`JAVA_HOME` and puts Java 8 first on `PATH`. Maven 3.9 runs on Java 8 and uses `JAVA_HOME`:
+
+```bash
+shed install maven39 java8
+source /path/to/toolshed/profile.d/java8.sh
+mvn39 -v        # Java version: 1.8.0_514, vendor: Temurin
+mvn39 package
+```
+
+Java 8 versions are recorded in Adoptium's `8.0.<update>` form (`8.0.514` is `8u514`); the build number
+is pinned in `metadata/java8-builds`.
 
 Maven installs provide `mvn39` and `mvn310` independently. The most recently
 run Maven installer also selects the `mvn` command. Maven Daemon's `mvnd`

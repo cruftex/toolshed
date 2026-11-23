@@ -15,6 +15,27 @@ matching Adoptium's published checksum. Smoke test 2026-11-15: installed twice f
 the second run skipped the matching installation. The build number is pinned in `metadata/java25-builds`.
 `shed discover java25` reads Adoptium's latest-release API and records the digest without moving the pin.
 
+### Eclipse Temurin Java 8 (`java8`)
+
+License: GPLv2 with the Classpath Exception, from the archive's top-level `LICENSE`; byte-identical to Java 25's,
+so it shares `metadata/license/4b9abebc….txt`.
+
+`shed install java8` installs Eclipse Temurin 8u514-b01 (Linux x86_64, glibc), recorded as version `8.0.514`
+(Adoptium's semver, `8.0.514+1`), under `$TOOLSHED_OPT_DIR/java8/8.0.514`. It links nothing into
+`TOOLSHED_BIN_DIR`, leaving Java 25's `java`/`javac` links unchanged; source `profile.d/java8.sh` to set `JAVA_HOME`.
+The [archive](https://github.com/adoptium/temurin8-binaries/releases/download/jdk8u514-b01/OpenJDK8U-jdk_x64_linux_hotspot_8u514b01.tar.gz)
+had locally calculated SHA-256 `27eda854481d20806d918b30cdd417c6bed4fd15882e24f3595dc8ae7fb5d095`, matching both
+Adoptium's API checksum and the release's published `.sha256.txt`. The build number (`01`) is pinned in
+`metadata/java8-builds`. Validation checks that `java -version` reports `openjdk version "1.8.0_514"` and
+`javac -version` reports `javac 1.8.0_514` (Java 8 prints both on stderr and has no `--version`).
+Smoke test 2026-11-23, in temporary bin/opt directories with spaces, run from another directory with `curl`
+blocked: Java 25 and Java 8 installed offline from the verified cache, a repeat install skipped the existing
+home, `java` in `TOOLSHED_BIN_DIR` still pointed at Java 25, and after sourcing the profile `javac` compiled and
+`java` ran a lambda-using class (class file major version 52). `mvn39 -v` (Maven 3.9.16) reported
+`Java version: 1.8.0_514, vendor: Temurin`, and `mvn39 package` with `maven.compiler.source/target=8`
+built a jar that ran under Java 8. `shed discover java8` reads Adoptium's latest Java 8 release API and records
+the digest, build and license without moving the pin.
+
 ### Oracle JDK 25 (`oracle-java25`)
 
 License: Oracle No-Fee Terms and Conditions (NFTC), stored as `metadata/license/df43f6a3….txt` (name in `df43f6a3….name.txt`)

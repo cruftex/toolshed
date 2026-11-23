@@ -344,6 +344,20 @@ java_is_installed() {
     [[ $output == "javac $expected" ]]
 }
 
+# Succeed if JDK_HOME holds a Java 8 JDK of VERSION 8.0.UPDATE. Java 8 has no --version; `-version` reports
+# 1.8.0_UPDATE on stderr, so option variables that make the JVM print extra lines are removed.
+java8_is_installed() {
+    local jdk_home=$1 expected output
+    local -a clean=(env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS)
+    [[ $2 =~ ^8\.0\.([0-9]+)$ ]] || return 1
+    expected=1.8.0_${BASH_REMATCH[1]}
+    [[ -x $jdk_home/bin/java && -x $jdk_home/bin/javac ]] || return 1
+    output=$("${clean[@]}" "$jdk_home/bin/java" -version 2>&1) || return 1
+    [[ ${output%%$'\n'*} == "openjdk version \"$expected\"" ]] || return 1
+    output=$("${clean[@]}" "$jdk_home/bin/javac" -version 2>&1) || return 1
+    [[ $output == "javac $expected" ]]
+}
+
 maven_is_installed() {
     local home=$1 expected=$2 output
     [[ -x $home/bin/mvn ]] || return 1

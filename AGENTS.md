@@ -112,6 +112,7 @@ use repository-recorded verification metadata.
 | Bun | 1.4.4 | Linux x86_64, glibc | `tools/bun.sh` |
 | Eclipse Temurin Java | 25.0.5+8 | Linux x86_64, glibc | `tools/java25.sh` |
 | Oracle Java | 25.0.5 | Linux x86_64, glibc | `tools/oracle-java25.sh` |
+| Eclipse Temurin Java | 8.0.514 (8u514-b01) | Linux x86_64, glibc | `tools/java8.sh` |
 
 Bun's `bunx` entry point is a relative symlink to the `bun` executable.
 
