@@ -260,6 +260,14 @@ and extract their cached archive to compare executable bytes.
 | trivy 0.76.2 | [download](https://github.com/aquasecurity/trivy/releases/download/v0.76.2/trivy_0.76.2_Linux-64bit.tar.gz) | `bc0fc726e017b8927a62b2d3531d7a84ee01769daf5c99ed866dced54089fdbf` | `6a972c69606c7b3ea4c6bdcc6fc9332ea9ad38381624310c1e85cc77345909f3` |
 | yq 4.54.3 | [download](https://github.com/mikefarah/yq/releases/download/v4.54.3/yq_linux_amd64) | `129534601871538efe0ba4c5e62a34fb1d5f469bcb975c4fddeb467d82974973` | `129534601871538efe0ba4c5e62a34fb1d5f469bcb975c4fddeb467d82974973` |
 | kustomize 5.8.3 | [download](https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v5.8.3/kustomize_v5.8.3_linux_amd64.tar.gz) | `cb9e31198d3f63b44848bd0afc4c8efc56e6cfef9c93a4a39a211940e6decd61` | `a5e53d28755098b003ae2b6bff7b1650a411a366a0c800c1ea1b677e0cfff747` |
+| gh 2.105.0 (linux-x64) | [download](https://github.com/cli/cli/releases/download/v2.105.0/gh_2.105.0_linux_amd64.tar.gz) | `79e7ab5db738c48777b696e374f8b428f0647debfb424f44d2f426370407fe2f` | `fa7cff06d4db9eee98e00b10ac93beebfe1822109ac04a6cbbf9d806c21d0073` |
+| gh 2.105.0 (linux-aarch64) | [download](https://github.com/cli/cli/releases/download/v2.105.0/gh_2.105.0_linux_arm64.tar.gz) | `b1278c75107423d818f1937fd92cafc9e5e9b606631568f68d7fb816f5885a02` | `2ef7512bb4d097c62d98bd248465fee66e7488f213dd49af345ad5af10d15d20` |
+
+The gh 2.105.0 archive digests matched both GitHub's release asset digests and upstream's
+`gh_2.105.0_checksums.txt`. On Linux x86_64, installation into temporary paths containing spaces, a repeat
+install, a repeat install without the download cache, and repair of a modified executable succeeded; a corrupted
+cached archive was rejected without replacing the installed executable. The aarch64 archive was downloaded and
+verified, but not executed.
 
 Go 1.27.4 was downloaded from the [Linux x86_64 archive](https://go.dev/dl/go1.27.4.linux-amd64.tar.gz).
 Its locally calculated SHA-256, `7226736c2339719cda28fbf3a54d71aa63bcefe376e98cef00034268dab24840`,

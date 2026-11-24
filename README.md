@@ -32,6 +32,7 @@ metadata changes with `./update-readme.sh`.
 | [controller-gen](tools/controller-gen.sh) | 0.23.0 | Verified executable in bin |
 | [cosign](tools/cosign.sh) | 3.1.4 | Verified executable in bin |
 | [crane](tools/crane.sh) | 0.22.1 | Verified executable in bin |
+| [gh](tools/gh.sh) | 2.105.0 | Verified executable in bin |
 | [go](tools/go.sh) | 1.27.4 | Verified package in opt; entry points in bin |
 | [golangci-lint](tools/golangci-lint.sh) | 2.15.0 | Verified executable in bin |
 | [helm](tools/helm.sh) | 4.3.2 | Verified executable in bin |
@@ -78,11 +79,10 @@ the platform.
 kubectl provides the Kubernetes CLI (including Kustomize); Helm manages Kubernetes packages.
 kind runs local Kubernetes clusters using containers; clusterctl manages Cluster API providers.
 Choose a kubectl version compatible with your cluster. The standalone `kustomize`
-can be installed separately. Go installs both `go` and `gofmt` and defaults to `GOTOOLCHAIN=local` to avoid automatic toolchain downloads. The `gh`
-command is available from its upstream APT repository.
+can be installed separately. Go installs both `go` and `gofmt` and defaults to `GOTOOLCHAIN=local` to avoid automatic toolchain downloads.
 
 Toolshed also provides cloud-provider-kind, kubebuilder, controller-gen,
-setup-envtest, golangci-lint, cosign, crane, trivy, and Mike Farah’s yq.
+setup-envtest, golangci-lint, cosign, crane, trivy, the GitHub CLI (`gh`), and Mike Farah’s yq.
 setup-envtest downloads Kubernetes test assets separately when requested.
 
 ## Version schemes
