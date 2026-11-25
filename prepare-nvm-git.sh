@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/lib/install.sh"
+toolshed_init
 version=$(read_version_pin nvm)
 platform=$(platform_string)
 source "$_installer_library_dir/../metadata/nvm.sh"
