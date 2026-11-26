@@ -1,4 +1,19 @@
 {
+  "1.37.3/linux-x64": {
+    "checksum_url": "https://dl.k8s.io/release/v1.37.3/bin/linux/amd64/kubectl.sha256",
+    "discovered_at": "2026-11-26T12:55:09Z",
+    "effective_url": "https://dl.k8s.io/release/v1.37.3/bin/linux/amd64/kubectl.sha256",
+    "peer_ip": "151.101.193.91",
+    "tls": {
+      "subject": "CN=dl.k8s.io",
+      "issuer": "CN=YR1,O=Let's Encrypt,C=US",
+      "serial": "054decc1e3f1aa264198aeba1e72dccac0ac",
+      "not_before": "2026-10-09T06:48:02Z",
+      "not_after": "2027-01-07T06:48:01Z",
+      "sha256": "29113e1bf429224777810775cd14713f7a96c8c2c054b8789a08d50f492e3cfc",
+      "issuer_sha256": "13949634d99cd6fd6aa80bc034fefacceb1969feef986586713ecdbb05758d3f"
+    }
+  },
   "1.37.2/linux-x64": {
     "checksum_url": "https://dl.k8s.io/release/v1.37.2/bin/linux/amd64/kubectl.sha256",
     "discovered_at": "2026-11-16T11:48:07Z",
