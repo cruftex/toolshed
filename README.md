@@ -50,6 +50,7 @@ metadata changes with `./update-readme.sh`.
 | [nvm](tools/nvm.sh) | 0.41.0 | Verified Git archive in NVM directory |
 | [oracle-java25](tools/oracle-java25.sh) | 25.0.5 | Oracle JDK; verified package in opt; activate with profile; source [`profile.d/oracle-java25.sh`](profile.d/oracle-java25.sh) |
 | [setup-envtest](tools/setup-envtest.sh) | 0.25.3 | Verified executable in bin |
+| [shb](tools/shb.sh) | 0.6.0 | Verified executable in bin |
 | [trivy](tools/trivy.sh) | 0.76.2 | Verified executable in bin |
 | [vegeta](tools/vegeta.sh) | 12.13.0 | Verified executable in bin |
 | [yq](tools/yq.sh) | 4.54.3 | Verified executable in bin |
@@ -157,6 +158,10 @@ without HTTP/3 or other optional features. The build needs a C++23 compiler with
 `<print>` (GCC 14: `g++-14`; `CXX` selects another) and
 `libev-dev libc-ares-dev libssl-dev zlib1g-dev pkg-config`. The built executable
 depends on the local toolchain, so only the source archive's digest is pinned.
+
+shb is an io_uring HTTP/1.1, HTTP/2 and HTTP/3 load generator; it needs Linux 6.0 or newer.
+Upstream publishes statically linked (musl) executables for x86_64 and aarch64. shb has no
+version flag, so `shed` identifies the installed version by the executable's recorded digest.
 
 ## Managing installed tools
 

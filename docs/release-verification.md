@@ -262,12 +262,20 @@ and extract their cached archive to compare executable bytes.
 | kustomize 5.8.3 | [download](https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v5.8.3/kustomize_v5.8.3_linux_amd64.tar.gz) | `cb9e31198d3f63b44848bd0afc4c8efc56e6cfef9c93a4a39a211940e6decd61` | `a5e53d28755098b003ae2b6bff7b1650a411a366a0c800c1ea1b677e0cfff747` |
 | gh 2.105.0 (linux-x64) | [download](https://github.com/cli/cli/releases/download/v2.105.0/gh_2.105.0_linux_amd64.tar.gz) | `79e7ab5db738c48777b696e374f8b428f0647debfb424f44d2f426370407fe2f` | `fa7cff06d4db9eee98e00b10ac93beebfe1822109ac04a6cbbf9d806c21d0073` |
 | gh 2.105.0 (linux-aarch64) | [download](https://github.com/cli/cli/releases/download/v2.105.0/gh_2.105.0_linux_arm64.tar.gz) | `b1278c75107423d818f1937fd92cafc9e5e9b606631568f68d7fb816f5885a02` | `2ef7512bb4d097c62d98bd248465fee66e7488f213dd49af345ad5af10d15d20` |
+| shb 0.6.0 (linux-x64) | [download](https://github.com/hatoo/shb/releases/download/v0.6.0/shb-linux-amd64) | `92254d9ea09592f24c69d0d7c8cc01eb3ae1ccd103e37261425ad6454ea9c22f` | `92254d9ea09592f24c69d0d7c8cc01eb3ae1ccd103e37261425ad6454ea9c22f` |
+| shb 0.6.0 (linux-aarch64) | [download](https://github.com/hatoo/shb/releases/download/v0.6.0/shb-linux-arm64) | `ebe645a9ba9cd9c6306842ec51466f03605c740176ce3e6a22aa34a67c0015cd` | `ebe645a9ba9cd9c6306842ec51466f03605c740176ce3e6a22aa34a67c0015cd` |
 
 The gh 2.105.0 archive digests matched both GitHub's release asset digests and upstream's
 `gh_2.105.0_checksums.txt`. On Linux x86_64, installation into temporary paths containing spaces, a repeat
 install, a repeat install without the download cache, and repair of a modified executable succeeded; a corrupted
 cached archive was rejected without replacing the installed executable. The aarch64 archive was downloaded and
 verified, but not executed.
+
+The shb 0.6.0 executable digests matched GitHub's release asset digests; upstream publishes no separate
+checksum file. On Linux x86_64, installation into temporary paths containing spaces from another directory, a
+repeat install, a repeat install without the download cache, and repair of a modified executable succeeded; a
+corrupted cached download was rejected without replacing the installed executable. `shb --help` and a short
+HTTP/1.1 run against a local server succeeded. The aarch64 executable was downloaded and verified, but not executed.
 
 Go 1.27.4 was downloaded from the [Linux x86_64 archive](https://go.dev/dl/go1.27.4.linux-amd64.tar.gz).
 Its locally calculated SHA-256, `7226736c2339719cda28fbf3a54d71aa63bcefe376e98cef00034268dab24840`,

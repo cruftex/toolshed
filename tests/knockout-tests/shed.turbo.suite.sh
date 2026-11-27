@@ -149,9 +149,13 @@ t_detect_digest() {
     script "$case_dir/bin/demo" 'exit 0'
     local digest
     digest=$(sha256sum < "$case_dir/bin/demo")
-    printf '1.4.0|/linux-x64/binary|%s|\n' "${digest%% *}" >> "$repo/metadata/artifacts/demo.psv"
+    printf '1.4.0|/linux-x64/binary|%s|\n2.0.0|/linux-aarch64/binary|%s|\n' "${digest%% *}" "${digest%% *}" \
+        >> "$repo/metadata/artifacts/demo.psv"
     tool_settings demo
     assert_eq "$(detect_version)" 1.4.0 match
+    platform_string() { echo linux-aarch64; }
+    assert_eq "$(detect_version)" 2.0.0 'host platform'
+    platform_string() { "$_installer_library_dir/platform.sh"; }
     printf 'changed\n' >> "$case_dir/bin/demo"
     assert_eq "$(detect_version)" '?' modified
 }

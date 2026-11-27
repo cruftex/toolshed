@@ -97,8 +97,8 @@ detect_version() {
         digest) # No version flag: identify the verified bytes by their recorded digest.
             [[ -f $executable && -x $executable ]] || return 0
             path=$(shed_table)
-            if [[ -f $path ]] && output=$(sha256sum < "$executable"); then
-                version=$(awk -F'|' -v d="${output%% *}" '$2 == "/linux-x64/binary" && $3 == d {print $1}' "$path" |
+            if [[ -f $path ]] && output=$(sha256sum < "$executable") && home=$(platform_string 2> /dev/null); then
+                version=$(awk -F'|' -v d="${output%% *}" -v a="/$home/binary" '$2 == a && $3 == d {print $1}' "$path" |
                     version_max)
             fi
             printf '%s\n' "${version:-?}" ;;

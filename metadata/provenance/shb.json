@@ -1,0 +1,32 @@
+{
+  "0.6.0/linux-aarch64": {
+    "checksum_url": "https://api.github.com/repos/hatoo/shb/releases/latest",
+    "discovered_at": "2026-11-27T10:54:45Z",
+    "effective_url": "https://api.github.com/repos/hatoo/shb/releases/latest",
+    "peer_ip": "20.205.243.168",
+    "tls": {
+      "subject": "CN=*.github.com",
+      "issuer": "CN=Sectigo Public Server Authentication CA DV E36,O=Sectigo Limited,C=GB",
+      "serial": "73105b5e1c8d47dcc513d992659061e1",
+      "not_before": "2026-10-28T00:00:00Z",
+      "not_after": "2027-01-25T23:59:59Z",
+      "sha256": "30988ded7e78994b5c3fc151977c0205cb15ee1eb247639751c5334f2b630e32",
+      "issuer_sha256": "873f0ba80e3ac222656dfd04158cc15c2927d42d5d05f01dee4a47eb43a916df"
+    }
+  },
+  "0.6.0/linux-x64": {
+    "checksum_url": "https://api.github.com/repos/hatoo/shb/releases/latest",
+    "discovered_at": "2026-11-27T10:54:45Z",
+    "effective_url": "https://api.github.com/repos/hatoo/shb/releases/latest",
+    "peer_ip": "20.205.243.168",
+    "tls": {
+      "subject": "CN=*.github.com",
+      "issuer": "CN=Sectigo Public Server Authentication CA DV E36,O=Sectigo Limited,C=GB",
+      "serial": "73105b5e1c8d47dcc513d992659061e1",
+      "not_before": "2026-10-28T00:00:00Z",
+      "not_after": "2027-01-25T23:59:59Z",
+      "sha256": "30988ded7e78994b5c3fc151977c0205cb15ee1eb247639751c5334f2b630e32",
+      "issuer_sha256": "873f0ba80e3ac222656dfd04158cc15c2927d42d5d05f01dee4a47eb43a916df"
+    }
+  }
+}
