@@ -108,7 +108,7 @@ t_target_version_respects_delay_and_pin() {
 }
 
 t_recorded_versions_lists_all_platforms() {
-    echo "# shed available lists the pin and every recorded non-license version, ascending"
+    echo "# recorded_versions lists the pin and every recorded non-license version, ascending"
     setup_shed
     printf '1.2.8\n' > "$repo/pins/demo"
     printf '2.0.0|/license|aa|\n2.1.0|/darwin-x64/archive/tar.gz|aa|\n' >> "$repo/metadata/artifacts/demo.psv"
@@ -213,10 +213,17 @@ t_move_pin_keeps_permissions() {
 }
 
 t_available_and_readme_table() {
-    echo "# shed available and the README table list pinned tools"
+    echo "# shed available shows the pin, installed version and recorded version count"
     setup_shed
-    assert_eq "$(shed_available)" "TOOL         DEFAULT          RECORDED VERSIONS
-demo         1.2.9            1.2.9,1.2.10,1.3.0" available
+    local header='TOOL         DEFAULT          INSTALLED        RECORDED VERSIONS'
+    assert_eq "$(shed_available)" "$header
+demo         1.2.9            -                3" absent
+    script "$case_dir/bin/demo" 'echo 1.2.8'
+    assert_eq "$(shed_available)" "$header
+demo         1.2.9            1.2.8            3" installed
+    script "$case_dir/bin/demo" 'echo no version'
+    assert_eq "$(shed_available)" "$header
+demo         1.2.9            ?                3" unreadable
     assert_eq "$(readme_tools_table | tail -n 1)" '| [demo](tools/demo.sh) | 1.3.0 | Verified executable in bin |' readme
 }
 

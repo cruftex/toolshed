@@ -14,6 +14,7 @@ usage='Usage: shed {available|installed|install TOOL...|update [--delay-days DAY
 case ${1:-} in
     available)
         [[ $# == 1 ]] || { printf 'Usage: shed available\n' >&2; exit 2; }
+        toolshed_init
         shed_available
         ;;
     discoverable) # For automation: the tools that have a release discovery.

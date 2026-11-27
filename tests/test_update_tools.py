@@ -273,3 +273,75 @@ if [[ $url == */latest ]]; then cp "$FIXTURE/release.json" "$out"; else cp "$FIX
             self.assertEqual(metadata.read_bytes(), before)
             self.assertEqual((repo / 'pins/vegeta').read_bytes(), pin)
             self.assertFalse((root / 'bin/vegeta').exists())
+
+    def test_h2load_source_build_discovery_and_install(self):
+        with tempfile.TemporaryDirectory(prefix='h2load build ') as temp:
+            root = Path(temp)
+            repo = root / 'repo'
+            for directory in ('tools', 'lib', 'metadata', 'pins'):
+                shutil.copytree(ROOT / directory, repo / directory)
+            (repo / 'env').write_text('\n'.join(f'{key}={shlex.quote(str(root / value))}' for key, value in [('TOOLSHED_DOWNLOAD_DIR','cache'), ('TOOLSHED_BIN_DIR','bin'), ('TOOLSHED_OPT_DIR','opt dir')]) + '\n')
+            # A fake source tree: configure counts builds, src's Makefile writes an h2load that prints its version.
+            files = {
+                'configure': '#!/bin/sh\necho build >> "$FIXTURE/builds"\n',
+                'lib/Makefile': 'all:\n\t@true\n',
+                'third-party/Makefile': 'all:\n\t@true\n',
+                'src/Makefile': 'h2load:\n\t@test -z "$$FAIL_BUILD"\n\t@printf \'#!/bin/sh\\necho "h2load nghttp2/9.9.0"\\n\' > h2load\n\t@chmod +x h2load\n',
+                'src/h2load.cc': '',
+                'doc/h2load.1': '.TH H2LOAD\n',
+                'COPYING': 'license text\n',
+            }
+            archive = root / 'nghttp2-9.9.0.tar.gz'
+            with tarfile.open(archive, 'w:gz') as tar:
+                for name, text in files.items():
+                    member = tarfile.TarInfo(f'nghttp2-9.9.0/{name}')
+                    member.size = len(text.encode())
+                    member.mode = 0o755 if name == 'configure' else 0o644
+                    tar.addfile(member, io.BytesIO(text.encode()))
+            assets = [{'name':archive.name, 'digest':'sha256:' + hashlib.sha256(archive.read_bytes()).hexdigest()}]
+            (root / 'release.json').write_text(json.dumps({'tag_name':'v9.9.0', 'draft':False, 'prerelease':False, 'assets':assets}))
+            commands = root / 'commands'
+            commands.mkdir()
+            (commands / 'curl').write_text('''#!/bin/bash
+[[ -z ${OFFLINE:-} ]] || exit 7
+while (($#)); do
+ case $1 in https://*) url=$1 ;; --output) out=$2; shift ;; esac
+ shift
+done
+[[ $url != https://raw.githubusercontent.com/* ]] || { printf 'license text\n' > "$out"; exit 0; }
+if [[ $url == */latest ]]; then cp "$FIXTURE/release.json" "$out"; else cp "$FIXTURE/${url##*/}" "$out"; fi
+''')
+            (commands / 'fake-c++').write_text('#!/bin/sh\nexit 0\n')
+            for command in commands.iterdir():
+                command.chmod(0o755)
+            env = dict(os.environ, PATH=f'{commands}:{os.environ["PATH"]}', FIXTURE=str(root), CXX='fake-c++')
+            result = subprocess.run([repo / 'lib/discover-tool.sh', 'h2load'], cwd=root, env=env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout.strip(), '9.9.0')
+            table = (repo / 'metadata/artifacts/h2load.psv').read_text()
+            self.assertIn(f'9.9.0|/linux-x64/archive/tar.gz|{assets[0]["digest"][7:]}|', table)
+            self.assertIn('9.9.0|/license|', table)
+            self.assertFalse((root / 'bin/h2load').exists())
+            install = [repo / 'lib/install-tool.sh', 'h2load']
+            env.update(TOOLSHED_OVERRIDE_TOOL_VERSION='9.9.0', OFFLINE='1')
+            home = root / 'opt dir/h2load/9.9.0'
+            result = subprocess.run(install, cwd=repo, env=dict(env, FAIL_BUILD='1'), capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('Cannot build h2load', result.stderr)
+            self.assertFalse(home.exists())
+            self.assertFalse((root / 'bin/h2load').exists())
+            for _ in range(2):
+                result = subprocess.run(install, cwd=repo, env=env, capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual((root / 'builds').read_text().count('build'), 3)
+            self.assertEqual(sorted(str(p.relative_to(home)) for p in home.rglob('*') if p.is_file()),
+                             ['COPYING', 'bin/h2load', 'share/man/man1/h2load.1'])
+            self.assertEqual((root / 'bin/h2load').resolve(), (home / 'bin/h2load').resolve())
+            output = subprocess.run([root / 'bin/h2load', '--version'], capture_output=True, text=True).stdout
+            self.assertEqual(output.strip(), 'h2load nghttp2/9.9.0')
+            shutil.rmtree(home)
+            cached = next((root / 'cache').rglob('nghttp2-9.9.0.tar.gz'))
+            cached.write_bytes(cached.read_bytes() + b'x')
+            result = subprocess.run(install, cwd=repo, env=env, capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertFalse(home.exists())

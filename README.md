@@ -25,24 +25,25 @@ metadata changes with `./update-readme.sh`.
 | Tool | Latest recorded version | Install strategy |
 | --- | --- | --- |
 | [bun](tools/bun.sh) | 1.4.5 | Verified executable in bin |
-| [claude](tools/claude.sh) | 2.1.330 | Verified executable in bin; checksums from the signed manifest |
+| [claude](tools/claude.sh) | 2.1.332 | Verified executable in bin; checksums from the signed manifest |
 | [cloud-provider-kind](tools/cloud-provider-kind.sh) | 0.12.0 | Verified executable in bin |
 | [clusterctl](tools/clusterctl.sh) | 1.14.4 | Verified executable in bin |
-| [codex](tools/codex.sh) | 0.171.0 | Verified executables in bin |
+| [codex](tools/codex.sh) | 0.172.0 | Verified executables in bin |
 | [controller-gen](tools/controller-gen.sh) | 0.23.0 | Verified executable in bin |
-| [cosign](tools/cosign.sh) | 3.1.4 | Verified executable in bin |
+| [cosign](tools/cosign.sh) | 3.1.6 | Verified executable in bin |
 | [crane](tools/crane.sh) | 0.22.1 | Verified executable in bin |
-| [gh](tools/gh.sh) | 2.105.0 | Verified executable in bin |
+| [gh](tools/gh.sh) | 2.106.0 | Verified executable in bin |
 | [go](tools/go.sh) | 1.27.4 | Verified package in opt; entry points in bin |
 | [golangci-lint](tools/golangci-lint.sh) | 2.15.0 | Verified executable in bin |
+| [h2load](tools/h2load.sh) | 1.71.0 | Verified source built into opt |
 | [helm](tools/helm.sh) | 4.3.2 | Verified executable in bin |
 | [java25](tools/java25.sh) | 25.0.5.1 | Eclipse Temurin; verified package in opt; entry points in bin; source [`profile.d/java25.sh`](profile.d/java25.sh) |
 | [java8](tools/java8.sh) | 8.0.514 | Eclipse Temurin; verified package in opt; activate with profile; source [`profile.d/java8.sh`](profile.d/java8.sh) |
 | [kind](tools/kind.sh) | 0.33.0 | Verified executable in bin |
 | [kubebuilder](tools/kubebuilder.sh) | 4.16.0 | Verified executable in bin |
-| [kubectl](tools/kubectl.sh) | 1.37.2 | Verified executable in bin |
+| [kubectl](tools/kubectl.sh) | 1.37.3 | Verified executable in bin |
 | [kustomize](tools/kustomize.sh) | 5.8.3 | Verified executable in bin |
-| [maven310](tools/maven310.sh) | 3.10.1 | Verified package in opt; entry points in bin |
+| [maven310](tools/maven310.sh) | 3.10.2 | Verified package in opt; entry points in bin |
 | [maven39](tools/maven39.sh) | 3.9.16 | Verified package in opt; entry points in bin |
 | [mvnd](tools/mvnd.sh) | 1.0.6 | Verified package in opt; entry points in bin |
 | [node24](tools/node24.sh) | 24.22.3 | Verified archive in NVM directory; source [`profile.d/node24.sh`](profile.d/node24.sh) |
@@ -55,7 +56,7 @@ metadata changes with `./update-readme.sh`.
 <!-- tools-table:end -->
 
 Run `./bin/shed install toolshed` to link `shed` into `TOOLSHED_BIN_DIR`,
-then run `shed available` to see tools, their default pins, and recorded versions.
+then run `shed available` to see each tool's default pin, installed version, and recorded version count.
 The link points into this checkout, which must remain in place.
 Install tools with `shed install`; for example:
 
@@ -149,6 +150,13 @@ four parts, e.g. `TOOLSHED_OVERRIDE_TOOL_VERSION=25.0.5.1 shed install java25`; 
 Maven installs provide `mvn39` and `mvn310` independently. The most recently
 run Maven installer also selects the `mvn` command. Maven Daemon's `mvnd`
 uses its own bundled Maven and does not enable the Maven Build Cache Extension.
+
+nghttp2 publishes h2load only as source. `shed install h2load` verifies the pinned
+source archive and builds only h2load into `$TOOLSHED_OPT_DIR/h2load/<version>/`,
+without HTTP/3 or other optional features. The build needs a C++23 compiler with
+`<print>` (GCC 14: `g++-14`; `CXX` selects another) and
+`libev-dev libc-ares-dev libssl-dev zlib1g-dev pkg-config`. The built executable
+depends on the local toolchain, so only the source archive's digest is pinned.
 
 ## Managing installed tools
 

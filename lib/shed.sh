@@ -208,11 +208,12 @@ recorded_versions() {
 }
 
 shed_available() {
-    local name
-    printf '%-12s %-16s %s\n' TOOL DEFAULT 'RECORDED VERSIONS'
+    local name version
+    printf '%-12s %-16s %-16s %s\n' TOOL DEFAULT INSTALLED 'RECORDED VERSIONS'
     while IFS= read -r name; do
         tool_settings "$name"
-        printf '%-12s %-16s %s\n' "$name" "$(pinned_version "$name")" "$(recorded_versions | paste -sd, -)"
+        version=$(detect_version)
+        printf '%-12s %-16s %-16s %s\n' "$name" "$(pinned_version "$name")" "${version:--}" "$(recorded_versions | wc -l)"
     done < <(for name in "$toolshed_root"/pins/*; do [[ ! -f $name ]] || printf '%s\n' "${name##*/}"; done | LC_ALL=C sort)
 }
 
